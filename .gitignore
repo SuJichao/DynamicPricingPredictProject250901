@@ -1,23 +1,20 @@
-# Python 缓存
+# Python 编译缓存
 __pycache__/
 *.pyc
 *.pyo
-*.pyw
 
 # IDE 配置
 .idea/
 .vscode/
 
 # Claude Code 本地会话记录
-
+.claude/
 
 # 运行日志
 logs/
 *.log
 
 # PyInstaller 打包产物
-*.exe
-*.spec
 dist/
 build/
 
@@ -25,8 +22,5 @@ build/
 instantclient_*/
 venvs/
 
-# 系统文件
-
-
 # 个人文件
-云桌面硬件环境.png
+*.png
