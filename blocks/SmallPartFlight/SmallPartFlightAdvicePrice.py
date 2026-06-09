@@ -3,9 +3,10 @@ import logging
 import numpy as np
 import pandas as pd
 
-from blocks.SmallPartFlight.SmallPartFlightCapCtrl import knn_run
 from config.config import get_argparse
 from config.pricing_constants import *
+
+# 注意：knn_run 的导入已移到函数内部，根据 args.use_v2_predictor 动态选择
 from common.get_logger import get_logger
 from common.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
 from data_provider.data_acquisition import get_data
@@ -15,6 +16,13 @@ import schedule
 def small_part_flight_advice_price(args):
     get_logger()
     logging.info(f"【低份额航班定价引擎】{args.version_number} 程序开始！")
+
+    # v2 开关：设置 args.use_v2_predictor=True 启用新版预测器
+    if getattr(args, 'use_v2_predictor', False):
+        from blocks.SmallPartFlight.SmallPartFlightCapCtrl_v2 import knn_run
+    else:
+        from blocks.SmallPartFlight.SmallPartFlightCapCtrl import knn_run
+
     # 1 利用KNN算法获取目标航班的库存水平
     flt_cap_ctrl = knn_run(args)
 

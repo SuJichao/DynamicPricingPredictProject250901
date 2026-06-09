@@ -1,0 +1,253 @@
+"""
+【程序目的】
+KNN 预测管道基类（v2 重构版）。
+提取 FlightCapControlKnn 和 SoloFlightNumberIncreaseKNN 的公共骨架：
+  clean_data / knn_est 管道 / worker / run（单/多进程调度）。
+
+子类只需覆盖 data_deal() 和 predict_write_back() 即可。
+
+使用方式：
+  from blocks.UniversalModule.KNNBasePredictor import KNNBasePredictor
+
+  class MyPredictor(KNNBasePredictor):
+      KNN_MODEL_CLASS = MyKnnModel
+      DEFAULT_K = 3
+      ...
+      def data_deal(self, data): ...
+      def predict_write_back(self, y_pred, target_index, knn_list): ...
+"""
+
+import logging
+import multiprocessing as mp
+import sys
+from multiprocessing import Pool
+
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+
+from common.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
+from data_provider.data_acquisition import get_data
+from blocks.UniversalModule.DataFetchRules import fetch_train_data, fetch_predict_data
+
+
+class KNNBasePredictor:
+    """
+    KNN 预测管道基类。
+
+    子类必须覆盖的类属性：
+      KNN_MODEL_CLASS:      KNN 模型类（如 SmallFltKnnRegressorFunction_v2）
+      DEFAULT_K:            普通日 K 值
+      HOLIDAY_K:            节假日 K 值
+      SPRING_FESTIVAL_K:    春运 K 值
+      FETCH_CONTEXT:        DataFetchRules.FetchContext 实例
+      MULTIPROCESS_THRESHOLD: 单/多进程切换阈值
+
+    子类必须覆盖的方法：
+      data_deal(data):              特征工程
+      predict_write_back(y_pred, target_index, knn_list): 预测写回
+      init_special():               子类特化初始化逻辑
+    """
+
+    # === 子类覆盖 ===
+    KNN_MODEL_CLASS = None
+    DEFAULT_K = 3
+    HOLIDAY_K = 1
+    SPRING_FESTIVAL_K = 1
+    MULTIPROCESS_THRESHOLD = 30
+    FETCH_CONTEXT = None       # DataFetchRules.FetchContext
+
+    # === 子类可选覆盖 ===
+    NEED_EST_DATA_SAME = False  # 小份额需要列对齐
+
+    def __init__(self, config):
+        self.config = config
+        self.train_data = pd.DataFrame()
+        self.predict_data = pd.DataFrame()
+        self.tmp_data = None
+        self.result_data = pd.DataFrame()
+        self._setup_context()
+
+    def _setup_context(self):
+        """将 config 中的表名注入 FETCH_CONTEXT"""
+        ctx = self.FETCH_CONTEXT
+        ctx.train_table = self._get_train_table()
+        ctx.predict_table = self._get_predict_table()
+        ctx.list_table = self._get_list_table()
+
+    # --- 子类覆盖：表名获取 ---
+    def _get_train_table(self):
+        raise NotImplementedError
+
+    def _get_predict_table(self):
+        raise NotImplementedError
+
+    def _get_list_table(self):
+        raise NotImplementedError
+
+    def _get_list_name(self):
+        """返回预测列表的表名或配置键"""
+        raise NotImplementedError
+
+    def _get_cleanup_sql(self):
+        """返回 run() 开始时需清理的 DELETE SQL"""
+        raise NotImplementedError
+
+    # --- 特征工程（子类覆盖） ---
+    def data_deal(self, data):
+        """特征工程：sine/cosine 变换等"""
+        raise NotImplementedError
+
+    # --- 预测写回（子类覆盖） ---
+    def predict_write_back(self, y_pred, target_index, knn_list):
+        """预测结果写回 + 后处理"""
+        raise NotImplementedError
+
+    def _override_features(self, knn_list):
+        """可选：根据 knn_list 覆盖特征列（如独飞春运）"""
+        pass
+
+    def _post_process(self):
+        """可选：对 self.result_data 做最后的后处理"""
+        pass
+
+    # --- 公共方法 ---
+
+    def fetch_train_data(self, tmp_list):
+        """通过规则链获取训练数据"""
+        return fetch_train_data(self.FETCH_CONTEXT, tmp_list)
+
+    def fetch_predict_data(self, tmp_list):
+        """获取待预测数据"""
+        return fetch_predict_data(self.FETCH_CONTEXT, tmp_list)
+
+    def clean_data(self, data):
+        """公共数据清洗：重置索引 → 日期转换 → 特征工程 → 分离 X/Y"""
+        data = data.copy()
+        data.reset_index(drop=True, inplace=True)
+        data['FLT_DATE'] = pd.to_datetime(data['FLT_DATE'])
+        data = self.data_deal(data)
+        Y = data[self.Y_label_col]
+        X = data[self.X_label_col]
+        return X, Y
+
+    def _choose_k(self, knn_list):
+        """根据节假日标志选择 K 值"""
+        if knn_list.get('HOL_FALG') == 0:
+            return self.DEFAULT_K
+        elif knn_list.get('HOLIDAY_SPRING_FESTIVAL') == 1:
+            return self.SPRING_FESTIVAL_K
+        else:
+            return self.HOLIDAY_K
+
+    def knn_est(self, knn_list):
+        """
+        KNN 预测管道：
+        override features → clean → scale → create model → fit → predict → write back
+        """
+        # 先覆盖特征列（如独飞春运），再 clean_data
+        self._override_features(knn_list)
+
+        X, Y = self.clean_data(self.train_data)
+
+        # 标准化
+        scaler_x = StandardScaler()
+        x_train = scaler_x.fit_transform(X.to_numpy())
+        y_train = Y.to_numpy()
+
+        # 创建并训练模型
+        k = self._choose_k(knn_list)
+        knn = self.KNN_MODEL_CLASS(n_neighbors=k)
+        knn.fit(x_train, y_train)
+
+        # 预测
+        X_predict, Y_predict = self.clean_data(self.predict_data)
+        if self.NEED_EST_DATA_SAME:
+            X_predict = self._est_data_same(X, X_predict)
+        X_predict_std = scaler_x.transform(X_predict.to_numpy())
+
+        y_pred, target_index = knn.predict(X_predict_std, Y_predict)
+
+        # 写回（子类实现）
+        self.predict_write_back(y_pred, target_index, knn_list)
+
+    @staticmethod
+    def _est_data_same(train_data, est_data):
+        """确保预测数据与训练数据的列一致（小份额专用）"""
+        train_columns = train_data.columns.values.tolist()
+        miss_columns = set(train_columns) - set(est_data.columns)
+        for col in miss_columns:
+            est_data[col] = 0
+        adu_columns = set(est_data.columns) - set(train_columns)
+        est_data = est_data.drop(list(adu_columns), axis=1)
+        est_data = est_data.reindex(train_columns, axis=1)
+        return est_data
+
+    def worker(self, i):
+        """多进程 worker"""
+        data = pd.DataFrame()
+        tmp_sql = f"SELECT * FROM {self._get_list_name()} WHERE HX = {i + 1}"
+        knn_list = get_data("oracle", data_sql=tmp_sql).iloc[0]
+        self.predict_data = self.fetch_predict_data(knn_list)
+        self.train_data = self.fetch_train_data(knn_list)
+        if len(self.train_data) > 0:
+            self.knn_est(knn_list)
+            data = self.tmp_data
+        return data
+
+    def run(self):
+        """主执行入口：单进程/多进程调度"""
+        logging.info(f"【{self.__class__.__name__}】程序开始！")
+
+        # 清理临时表
+        cleanup_sql = self._get_cleanup_sql()
+        if cleanup_sql:
+            delete_predict_data(cleanup_sql)
+
+        knn_list = self._load_knn_list()
+
+        if len(knn_list) < self.MULTIPROCESS_THRESHOLD:
+            # 单进程模式
+            logging.info(
+                f"【{self.__class__.__name__}】单进程模式，数据量：{len(knn_list)}")
+            results = []
+            for _, row in knn_list.iterrows():
+                self.predict_data = self.fetch_predict_data(row)
+                self.train_data = self.fetch_train_data(row)
+                if len(self.train_data) > 0:
+                    self.knn_est(row)
+                    results.append(self.tmp_data)
+            self.result_data = (
+                pd.concat(results, ignore_index=True) if results else pd.DataFrame()
+            )
+        else:
+            # 多进程模式
+            num_cores = min(mp.cpu_count(), 4)
+            logging.info(
+                f"【{self.__class__.__name__}】{num_cores}进程模式，数据量：{len(knn_list)}")
+            try:
+                with Pool(processes=num_cores) as pool:
+                    results = list(
+                        pool.imap_unordered(self.worker, range(len(knn_list)))
+                    )
+                    if results:
+                        self.result_data = pd.concat(
+                            [r for r in results if r is not None and not r.empty],
+                            ignore_index=True
+                        )
+                    else:
+                        self.result_data = pd.DataFrame()
+            except Exception as e:
+                logging.error(f"多进程处理失败: {str(e)}")
+
+        # 后处理
+        self.result_data = self.result_data.sort_values(
+            by=['FLT_SEGMENT', 'FLT_DATE'], ascending=[True, True]
+        )
+        self.result_data.reset_index(drop=True, inplace=True)
+        self._post_process()
+        return self.result_data
+
+    def _load_knn_list(self):
+        """加载预测列表"""
+        return get_predict_data(f"SELECT * FROM {self._get_list_name()}")
