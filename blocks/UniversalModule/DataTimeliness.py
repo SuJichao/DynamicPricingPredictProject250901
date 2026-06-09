@@ -7,7 +7,7 @@ import logging
 import numpy as np
 
 from config.config import get_argparse
-from common.oracle.database_oracle import delete_predict_data
+from common.database_oracle import delete_predict_data
 from data_provider.data_acquisition import get_data
 from common.get_logger import get_logger
 from common.send_mail import send_mail

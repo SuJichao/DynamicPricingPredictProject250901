@@ -11,7 +11,7 @@ import pandas as pd
 
 from config.config import get_argparse
 from config.pricing_constants import *
-from common.oracle.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
+from common.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
 from data_provider.data_acquisition import get_data
 def bkd_sharp_rise(config, data):
     advice_price_data = data

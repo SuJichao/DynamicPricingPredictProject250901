@@ -11,7 +11,7 @@
        统一管理，不再硬编码在代码中。
 
 【使用方式】
-    from common.oracle.database_oracle import get_predict_data, insert_predict_data, verify_connection
+    from common.database_oracle import get_predict_data, insert_predict_data, verify_connection
 
     # 查询数据
     df = get_predict_data("SELECT * FROM my_table")
@@ -77,11 +77,11 @@ def _find_config_path():
             return candidate
 
     # ---- 方式3：开发环境，相对于本文件定位 ----
-    # 本文件路径：common/oracle/database_oracle.py
-    # 向上两级到项目根目录，再进入 config/ 目录
+    # 本文件路径：common/database_oracle.py
+    # 向上一级到项目根目录，再进入 config/ 目录
     script_dir = os.path.dirname(os.path.abspath(__file__))
     candidate = os.path.abspath(
-        os.path.join(script_dir, '..', '..', 'config', 'db_config.ini')
+        os.path.join(script_dir, '..', 'config', 'db_config.ini')
     )
     if os.path.isfile(candidate):
         return candidate
@@ -534,9 +534,9 @@ def callproc(proc_name):
 # 哪一步失败就能快速定位问题所在。
 #
 # 使用方式：
-#     python -m common.oracle.database_oracle
+#     python -m common.database_oracle
 #     或在代码中调用：
-#     from common.oracle.database_oracle import verify_connection
+#     from common.database_oracle import verify_connection
 #     result = verify_connection()
 # ---------------------------------------------------------------------------
 
@@ -602,7 +602,7 @@ if __name__ == '__main__':
     当直接运行此模块时，执行数据库连接验证。
 
     用法：
-        python -m common.oracle.database_oracle
+        python -m common.database_oracle
     """
     res = verify_connection()
     print('\n'.join(res["detail"]))

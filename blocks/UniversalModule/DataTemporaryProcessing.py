@@ -4,7 +4,7 @@
 """
 import logging
 
-from common.oracle.database_oracle import delete_predict_data, insert_predict_data
+from common.database_oracle import delete_predict_data, insert_predict_data
 from data_provider.data_acquisition import get_data
 from common.request import advicePriceUpdate
 

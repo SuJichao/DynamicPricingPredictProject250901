@@ -7,7 +7,7 @@ from blocks.SmallPartFlight.SmallPartFlightCapCtrl import knn_run
 from config.config import get_argparse
 from config.pricing_constants import *
 from common.get_logger import get_logger
-from common.oracle.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
+from common.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
 from data_provider.data_acquisition import get_data
 import schedule
 

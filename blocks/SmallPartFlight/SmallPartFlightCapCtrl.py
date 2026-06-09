@@ -14,7 +14,7 @@ from multiprocessing import Pool
 from sklearn.preprocessing import StandardScaler
 
 from config.config import get_argparse
-from common.oracle.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
+from common.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
 from data_provider.data_acquisition import get_data
 from common.get_logger import get_logger
 from model.KNeighborsRegressor import SmallFltKnnRegressorFunction

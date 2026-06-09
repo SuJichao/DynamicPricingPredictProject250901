@@ -8,7 +8,7 @@ import time
 
 from config.config import get_argparse
 from common.get_logger import get_logger
-from common.oracle.database_oracle import callproc, delete_predict_data
+from common.database_oracle import callproc, delete_predict_data
 from common.send_mail import send_mail, clean_sent_mails
 from blocks.UniversalModule.DataStorage import data_storage, delete_deduplication_data
 from blocks.UniversalModule.DataTemporaryProcessing import advice_price_output

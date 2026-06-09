@@ -2,7 +2,7 @@ import datetime
 import logging
 import uuid
 
-from common.oracle.database_oracle import get_predict_data, delete_predict_data, insert_predict_data, insert_data
+from common.database_oracle import get_predict_data, delete_predict_data, insert_predict_data, insert_data
 
 # 数据存储模块
 def data_storage(config, flt_type, result_data):

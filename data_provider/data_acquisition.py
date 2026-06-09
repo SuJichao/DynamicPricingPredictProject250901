@@ -6,7 +6,7 @@ import logging
 
 import pandas as pd
 
-from common.oracle.database_oracle import get_data as get_oracle_data
+from common.database_oracle import get_data as get_oracle_data
 
 
 def get_train_predict_data(data_flag, tarin_input_dir=None, train_dt_name=None, predict_input_dir=None, predict_dt_name=None,
