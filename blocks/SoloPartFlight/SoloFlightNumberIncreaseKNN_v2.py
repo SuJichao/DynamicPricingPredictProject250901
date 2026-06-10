@@ -19,7 +19,7 @@ import pandas as pd
 from config.pricing_constants import (
     SOLO_FLT_KNN_NORMAL_K, SOLO_FLT_KNN_HOLIDAY_K, SOLO_FLT_KNN_SPRING_FESTIVAL_K
 )
-from common.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
+from common.database_oracle import get_data, delete_data, insert_predict_data
 from model.KNeighborsRegressor_v2 import SoloFltKnnRegressorFunction_v2
 from blocks.UniversalModule.KNNBasePredictor import KNNBasePredictor
 from blocks.UniversalModule.DataFetchRules import SOLO_FLT_FETCH_CONTEXT

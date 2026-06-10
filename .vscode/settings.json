@@ -1,0 +1,11 @@
+{
+    "python.defaultInterpreterPath": "D:\\CodeStarge\\venvs\\dynamic_pricing_env\\Scripts\\python.exe",
+    "python.terminal.activateEnvironment": true,
+    "python.terminal.focusAfterLaunch": true,
+    "python.interpreter.infoVisibility": "always",
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.terminal.launchArgs": [],
+    "terminal.integrated.env.windows": {
+        "PATH": "D:\\CodeStarge\\venvs\\instantclient_19_9;${env:PATH}"
+    }
+}

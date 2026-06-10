@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"/d/CodeStarge/venvs/instantclient_19_9\")",
+      "Bash(cp -r \"d:/CodeStarge/DynamicPricingPredictProject250901/common/oracle/instantclient_19_9/\"* \"/d/CodeStarge/venvs/instantclient_19_9/\")",
+      "Read(//d/CodeStarge/venvs/**)",
+      "Bash(python -m py_compile run.py)"
+    ]
+  }
+}
