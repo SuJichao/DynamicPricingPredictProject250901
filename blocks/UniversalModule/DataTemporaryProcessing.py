@@ -4,12 +4,11 @@
 """
 import logging
 
-from common.database_oracle import delete_predict_data, insert_predict_data
-from data_provider.data_acquisition import get_data
+from common.database_oracle import get_data, delete_data, insert_data
 from common.request import advicePriceUpdate
 
 def advice_price_output():
-    rm_dp_data = get_data("oracle", data_sql=f"SELECT * FROM TMP_MAX_RETURN_ADVICE_PRICE_V2")
+    rm_dp_data = get_data(f"SELECT * FROM TMP_MAX_RETURN_ADVICE_PRICE_V2")
     # 1 先将数据传输至收益管理系统
     rm_tmp_data = rm_dp_data
     rm_tmp_data['FLT_DATE'] = rm_tmp_data['FLT_DATE'].astype('str')
@@ -28,23 +27,21 @@ def advice_price_output():
     '''
 
     # 将已经处理好的数据插入值最终表
-    rm_dp_data = get_data("oracle", data_sql=f"SELECT * FROM TMP_MAX_RETURN_ADVICE_PRICE_V2")
-    delete_predict_data(
+    rm_dp_data = get_data(f"SELECT * FROM TMP_MAX_RETURN_ADVICE_PRICE_V2")
+    delete_data(
         """DELETE FROM TMP_MAX_RETURN_ADVICE_PRICE""")
-    insert_predict_data(
-        """INSERT INTO TMP_MAX_RETURN_ADVICE_PRICE VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29)""",
-        rm_dp_data)
+    insert_data("TMP_MAX_RETURN_ADVICE_PRICE", rm_dp_data)
 
 
 
 def delete_deduplication_data():
-    delete_predict_data(
+    delete_data(
         """
         DELETE FROM KD_FUTURE_TMP_SJC_NEW_COPY A WHERE ROWID NOT IN (SELECT MAX(B.ROWID) FROM KD_FUTURE_TMP_SJC_NEW_COPY B 
         WHERE A.CATCH_DATE=B.CATCH_DATE AND A.CATCH_TIME = B.CATCH_TIME AND A.CATCH_DIF =B.CATCH_DIF  AND A.FLT_DATE =B.FLT_DATE AND A.CARRIER = B.CARRIER AND A.FLT_NO =B.FLT_NO 
         AND A.DEP =B.DEP  AND A.ARR = B.ARR AND A.ROUTE=B.ROUTE AND A.UP_DATE=B.UP_DATE)
         """)
-    delete_predict_data(
+    delete_data(
         """
         DELETE FROM MAX_RETURN_ADVICE_PRICE_COPY A WHERE ROWID NOT IN (SELECT MAX(B.ROWID) FROM MAX_RETURN_ADVICE_PRICE_COPY B 
         WHERE A.CATCH_DATE=B.CATCH_DATE AND A.EX_DIF = B.EX_DIF AND A.TIME_PT =B.TIME_PT  AND A.FLT_DATE =B.FLT_DATE AND A.FLT_NO = B.FLT_NO AND A.FLT_SEGMENT =B.FLT_SEGMENT)

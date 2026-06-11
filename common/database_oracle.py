@@ -11,13 +11,13 @@
        统一管理，不再硬编码在代码中。
 
 【使用方式】
-    from common.database_oracle import get_predict_data, insert_predict_data, verify_connection
+    from common.database_oracle import get_data, insert_data, verify_connection
 
     # 查询数据
-    df = get_predict_data("SELECT * FROM my_table")
+    df = get_data("SELECT * FROM my_table")
 
     # 插入数据
-    insert_predict_data("INSERT INTO my_table VALUES(:1, :2)", my_df)
+    insert_data("my_table", my_df)
 
     # 验证连接
     result = verify_connection()
@@ -437,27 +437,6 @@ def get_predict_data_param(sql, param1):
     return data
 
 
-def insert_predict_data(sql, Data):
-    """
-    将 pandas DataFrame 的数据批量插入 Oracle 表。
-
-    先将 DataFrame 转换为元组列表，再调用 executemany 进行批量插入。
-
-    Args:
-        sql: INSERT 语句，列数与 DataFrame 列数匹配
-        Data: 待插入的 pandas DataFrame
-
-    示例:
-        insert_predict_data(
-            "INSERT INTO TMP_MAX_RETURN VALUES(:1, :2, :3, :4)",
-            result_df
-        )
-    """
-    with Oracle() as db:
-        tuples = [tuple(x) for x in Data.values]
-        db.insertBatch(sql, tuples)
-
-
 def insert_data(table_name, df):
     """
     将 DataFrame 自动写入 Oracle 表，无需手动编写 INSERT 语句。
@@ -472,14 +451,6 @@ def insert_data(table_name, df):
         df: 待插入的 pandas DataFrame
 
     示例:
-        # 旧方式（需手动写 28 个占位符）：
-        insert_predict_data(
-            "INSERT INTO MAX_RETURN_ADVICE_PRICE_COPY "
-            "VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, "
-            "       :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, "
-            "       :21, :22, :23, :24, :25, :26, :27, :28)", df)
-
-        # 新方式（只需表名 + DataFrame，自动生成 SQL）：
         insert_data("MAX_RETURN_ADVICE_PRICE_COPY", df)
     """
     # 根据 DataFrame 的列名和列数，自动拼接 INSERT 语句

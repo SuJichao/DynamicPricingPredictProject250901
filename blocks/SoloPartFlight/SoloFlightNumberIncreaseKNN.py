@@ -12,24 +12,25 @@ from multiprocessing import Pool
 from sklearn.preprocessing import StandardScaler
 
 from config.config import get_argparse
-from common.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
-from data_provider.data_acquisition import get_data
+from config.pricing_constants import SOLO_KNN_FEATURE_COLS, SOLO_KNN_TARGET_COLS
+from common.database_oracle import get_data, delete_data, insert_data
 from model.KNeighborsRegressor import SoloFltKnnRegressorFunction
+from config.db_tables import (SOLO_ADVICE_PRICE_TRAIN_TABLE, SOLO_ADVICE_PRICE_PREDICT_TABLE, SOLO_ADVICE_PRICE_KNN_LIST)
 
 
 class SoloFlightNumberIncreaseKNN(object):
     def __init__(self, config):
         self.config = config
-        self.train_name = config.solo_flight_advice_price_train_table
-        self.predict_name = config.solo_flight_advice_price_predict_table
-        self.X_label_col = config.solo_x_label_col.split(",")
-        self.Y_label_col = config.solo_y_label_col.split(",")
+        self.train_name = SOLO_ADVICE_PRICE_TRAIN_TABLE
+        self.predict_name = SOLO_ADVICE_PRICE_PREDICT_TABLE
+        self.X_label_col = list(SOLO_KNN_FEATURE_COLS)
+        self.Y_label_col = list(SOLO_KNN_TARGET_COLS)
         self.predict_data = get_data("oracle",
-                                     data_sql=f"SELECT * FROM {self.config.solo_flight_advice_price_predict_table}")
+                                     data_sql=f"SELECT * FROM {SOLO_ADVICE_PRICE_PREDICT_TABLE}")
         self.knn_result = pd.DataFrame()
         self.tmp_data = None
         self.solo_flight_list = get_data("oracle",
-                                         data_sql=f"SELECT * FROM {self.config.solo_flight_advice_price_knn_predict_list}")
+                                         data_sql=f"SELECT * FROM {SOLO_ADVICE_PRICE_KNN_LIST}")
         logging.info(f"【SoloFlightNumberIncreaseKNN】{self.config.version_number} 程序开始！")
         # self.run()
 
@@ -67,7 +68,7 @@ class SoloFlightNumberIncreaseKNN(object):
                 FROM {self.predict_name} A
                 WHERE FLT_SEGMENT='{tmp_list['FLT_SEGMENT']}' AND EX_DIF={tmp_list['EX_DIF']} AND TIME_PT={tmp_list['TIME_PT']} AND DOW={tmp_list['DOW']}
             '''
-            self.predict_data = get_predict_data(predict_list_sql)
+            self.predict_data = get_data(predict_list_sql)
             # 获取训练数据（按照分级解除限制的逻辑进行判断）
             if 7 <= tmp_list['MONTH'] <= 8:  # 当目标航班处于暑运时间内，严格对标其历史样本（在可以找到样本数据的前提下）
                 train_list_sql = f'''
@@ -93,7 +94,7 @@ class SoloFlightNumberIncreaseKNN(object):
                     AND HOL_FALG='{tmp_list['HOL_FALG']}'
                     AND AIR_CODE IN ('MF','NS','RY')
                 '''
-            self.train_data = get_predict_data(train_list_sql)
+            self.train_data = get_data(train_list_sql)
             # 解除1级限制
             if len(self.train_data) <= 1:
                 train_list_sql = f'''
@@ -103,7 +104,7 @@ class SoloFlightNumberIncreaseKNN(object):
                     AND HOL_FALG='{tmp_list['HOL_FALG']}'
                     AND AIR_CODE IN ('MF','NS','RY')
                 '''
-                self.train_data = get_predict_data(train_list_sql)
+                self.train_data = get_data(train_list_sql)
                 if len(self.train_data) <= 1:
                     logging.warning(
                         f"普通日样本池数据寻找失败，建议重新检查寻找逻辑！航段信息：{tmp_list['FLT_SEGMENT']}，距离起飞天数{tmp_list['EX_DIF']}，采集时点{tmp_list['TIME_PT']}。")
@@ -121,7 +122,7 @@ class SoloFlightNumberIncreaseKNN(object):
                     AND HOL_AFTER_TWO_DAY={tmp_list['HOL_AFTER_TWO_DAY']} AND HOLIDAY_SPRING_FESTIVAL={tmp_list['HOLIDAY_SPRING_FESTIVAL']} 
                     AND HOL_FALG={tmp_list['HOL_FALG']} AND HOL_LAST={tmp_list['HOL_LAST']} AND HOLIDAY_RANGE={tmp_list['HOLIDAY_RANGE']}
             '''
-            self.predict_data = get_predict_data(predict_list_sql)
+            self.predict_data = get_data(predict_list_sql)
             # 放假天数为1天的情况
             if (tmp_list['HOL_LAST'] == 1) & (tmp_list['HOLIDAY_SPRING_FESTIVAL'] == 0):
                 # 获取训练数据（按照分级解除限制的逻辑进行判断）
@@ -134,7 +135,7 @@ class SoloFlightNumberIncreaseKNN(object):
                         AND HOLIDAY_SPRING_FESTIVAL={tmp_list['HOLIDAY_SPRING_FESTIVAL']} 
                         AND HOL_FALG={tmp_list['HOL_FALG']} AND HOL_LAST={tmp_list['HOL_LAST']} AND HOLIDAY_RANGE={tmp_list['HOLIDAY_RANGE']}
                 '''
-                self.train_data = get_predict_data(train_list_sql)
+                self.train_data = get_data(train_list_sql)
                 # 解除1级限制
                 if len(self.train_data) <= 1:
                     train_list_sql = f'''
@@ -157,7 +158,7 @@ class SoloFlightNumberIncreaseKNN(object):
                         AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                         )
                     '''
-                    self.train_data = get_predict_data(train_list_sql)
+                    self.train_data = get_data(train_list_sql)
                     # 解除2级限制
                     if len(self.train_data) <= 1:
                         train_list_sql = f'''
@@ -193,7 +194,7 @@ class SoloFlightNumberIncreaseKNN(object):
                             AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                             )
                         '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
                         if len(self.train_data) <= 1:
                             logging.warning(
                                 f"节假日（1天）样本池数据寻找失败，建议重新检查寻找逻辑！航段信息：{tmp_list['FLT_SEGMENT']}，距离起飞天数{tmp_list['EX_DIF']}，采集时点{tmp_list['TIME_PT']}。")
@@ -209,7 +210,7 @@ class SoloFlightNumberIncreaseKNN(object):
                         AND HOLIDAY_SPRING_FESTIVAL={tmp_list['HOLIDAY_SPRING_FESTIVAL']} 
                         AND HOL_FALG={tmp_list['HOL_FALG']} AND HOL_LAST={tmp_list['HOL_LAST']} AND HOLIDAY_RANGE={tmp_list['HOLIDAY_RANGE']}
                 '''
-                self.train_data = get_predict_data(train_list_sql)
+                self.train_data = get_data(train_list_sql)
                 # 解除1级限制
                 if len(self.train_data) <= 1:
                     train_list_sql = f'''
@@ -232,7 +233,7 @@ class SoloFlightNumberIncreaseKNN(object):
                         AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                         )
                     '''
-                    self.train_data = get_predict_data(train_list_sql)
+                    self.train_data = get_data(train_list_sql)
                     # 解除2级限制
                     if len(self.train_data) <= 1:
                         train_list_sql = f'''
@@ -268,7 +269,7 @@ class SoloFlightNumberIncreaseKNN(object):
                             AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                             )
                         '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
                         if len(self.train_data) <= 1:
                             logging.warning(
                                 f"节假日（3天）样本池数据寻找失败，建议重新检查寻找逻辑！航段信息：{tmp_list['FLT_SEGMENT']}，距离起飞天数{tmp_list['EX_DIF']}，采集时点{tmp_list['TIME_PT']}。")
@@ -286,7 +287,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                 AND HOLIDAY_SPRING_FESTIVAL={tmp_list['HOLIDAY_SPRING_FESTIVAL']} 
                                 AND HOL_FALG={tmp_list['HOL_FALG']} AND HOL_LAST>=3 AND HOLIDAY_RANGE<0
                         '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
                         # 解除1级限制
                         if len(self.train_data) <= 1:
                             train_list_sql = f'''
@@ -307,7 +308,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                     AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                                 )
                             '''
-                            self.train_data = get_predict_data(train_list_sql)
+                            self.train_data = get_data(train_list_sql)
                             # 解除2级限制
                             if len(self.train_data) <= 1:
                                 train_list_sql = f'''
@@ -341,7 +342,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                     AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                                     )
                                 '''
-                                self.train_data = get_predict_data(train_list_sql)
+                                self.train_data = get_data(train_list_sql)
                                 if len(self.train_data) <= 1:
                                     logging.warning(
                                         f"节假日（4天以上节前）样本池数据寻找失败，建议重新检查寻找逻辑！航段信息：{tmp_list['FLT_SEGMENT']}，距离起飞天数{tmp_list['EX_DIF']}，采集时点{tmp_list['TIME_PT']}。")
@@ -355,7 +356,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                 AND HOLIDAY_SPRING_FESTIVAL={tmp_list['HOLIDAY_SPRING_FESTIVAL']} 
                                 AND HOL_FALG={tmp_list['HOL_FALG']} AND HOL_LAST>=3 AND HOL_LAST-HOLIDAY_RANGE<0
                         '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
                         # 解除1级限制
                         if len(self.train_data) <= 1:
                             train_list_sql = f'''
@@ -376,7 +377,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                     AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                                 )
                             '''
-                            self.train_data = get_predict_data(train_list_sql)
+                            self.train_data = get_data(train_list_sql)
                             # 解除2级限制
                             if len(self.train_data) <= 1:
                                 train_list_sql = f'''
@@ -410,7 +411,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                         AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                                     )
                                 '''
-                                self.train_data = get_predict_data(train_list_sql)
+                                self.train_data = get_data(train_list_sql)
                                 if len(self.train_data) <= 1:
                                     logging.warning(
                                         f"节假日（4天以上节后）样本池数据寻找失败，建议重新检查寻找逻辑！航段信息：{tmp_list['FLT_SEGMENT']}，距离起飞天数{tmp_list['EX_DIF']}，采集时点{tmp_list['TIME_PT']}。")
@@ -435,7 +436,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                     OR (HOL_LAST=8 AND HOLIDAY_RANGE BETWEEN 1 AND 2)
                                     )
                             '''
-                            self.train_data = get_predict_data(train_list_sql)
+                            self.train_data = get_data(train_list_sql)
                             # 解除1级限制
                             if len(self.train_data) <= 1:
                                 train_list_sql = f'''
@@ -462,7 +463,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                     AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                                 )
                                 '''
-                                self.train_data = get_predict_data(train_list_sql)
+                                self.train_data = get_data(train_list_sql)
                                 # 解除2级限制
                                 if len(self.train_data) <= 1:
                                     train_list_sql = f'''
@@ -502,7 +503,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                             AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                                         )
                                     '''
-                                    self.train_data = get_predict_data(train_list_sql)
+                                    self.train_data = get_data(train_list_sql)
                                     if len(self.train_data) <= 1:
                                         logging.warning(
                                             f"节假日（4天以上节中第1-2天）样本池数据寻找失败，建议重新检查寻找逻辑！航段信息：{tmp_list['FLT_SEGMENT']}，距离起飞天数{tmp_list['EX_DIF']}，采集时点{tmp_list['TIME_PT']}。")
@@ -525,7 +526,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                     OR (HOL_LAST=8 AND HOLIDAY_RANGE BETWEEN 7 AND 8)
                                     )
                             '''
-                            self.train_data = get_predict_data(train_list_sql)
+                            self.train_data = get_data(train_list_sql)
                             # 解除1级限制
                             if len(self.train_data) <= 1:
                                 train_list_sql = f'''
@@ -552,7 +553,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                     AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                                 )
                                 '''
-                                self.train_data = get_predict_data(train_list_sql)
+                                self.train_data = get_data(train_list_sql)
                                 # 解除2级限制
                                 if len(self.train_data) <= 1:
                                     train_list_sql = f'''
@@ -592,7 +593,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                             AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                                         )
                                     '''
-                                    self.train_data = get_predict_data(train_list_sql)
+                                    self.train_data = get_data(train_list_sql)
                                     if len(self.train_data) <= 1:
                                         logging.warning(
                                             f"节假日（4天以上节中最后1-2天）样本池数据寻找失败，建议重新检查寻找逻辑！航段信息：{tmp_list['FLT_SEGMENT']}，距离起飞天数{tmp_list['EX_DIF']}，采集时点{tmp_list['TIME_PT']}。")
@@ -612,7 +613,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                     OR (HOL_LAST=8 AND HOLIDAY_RANGE BETWEEN 3 AND 6)
                                     )
                             '''
-                            self.train_data = get_predict_data(train_list_sql)
+                            self.train_data = get_data(train_list_sql)
                             # 解除1级限制
                             if len(self.train_data) <= 1:
                                 train_list_sql = f'''
@@ -639,7 +640,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                     AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                                 )
                                 '''
-                                self.train_data = get_predict_data(train_list_sql)
+                                self.train_data = get_data(train_list_sql)
                                 # 解除2级限制
                                 if len(self.train_data) <= 1:
                                     train_list_sql = f'''
@@ -679,7 +680,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                             AND A.HOLIDAY_SPRING_FESTIVAL=B.HOLIDAY_SPRING_FESTIVAL
                                         )
                                     '''
-                                    self.train_data = get_predict_data(train_list_sql)
+                                    self.train_data = get_data(train_list_sql)
                                     if len(self.train_data) <= 1:
                                         logging.warning(
                                             f"节假日（4天以上节中其他天）样本池数据寻找失败，建议重新检查寻找逻辑！航段信息：{tmp_list['FLT_SEGMENT']}，距离起飞天数{tmp_list['EX_DIF']}，采集时点{tmp_list['TIME_PT']}。")
@@ -693,7 +694,7 @@ class SoloFlightNumberIncreaseKNN(object):
                             AND HOLIDAY_SPRING_FESTIVAL={tmp_list['HOLIDAY_SPRING_FESTIVAL']} 
                             AND HOL_FALG={tmp_list['HOL_FALG']} AND HOLIDAY_RANGE={tmp_list['HOLIDAY_RANGE']}
                     '''
-                    self.train_data = get_predict_data(train_list_sql)
+                    self.train_data = get_data(train_list_sql)
                     if len(self.train_data) < 1 and tmp_list['HOLIDAY_RANGE'] < -14:  # 除夕前3周
                         # 获取训练数据（按照分级解除限制的逻辑进行判断）
                         train_list_sql = f'''
@@ -704,7 +705,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                 AND HOL_FALG={tmp_list['HOL_FALG']}
                                 AND HOLIDAY_RANGE<-14
                         '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
                     elif len(self.train_data) < 1 and tmp_list['HOLIDAY_RANGE'] >= -14 and tmp_list['HOLIDAY_RANGE'] <= -8:  # 除夕前2周（含除夕）
                         # 获取训练数据（按照分级解除限制的逻辑进行判断）
                         train_list_sql = f'''
@@ -716,7 +717,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                 AND HOLIDAY_RANGE>=-14
                                 AND HOLIDAY_RANGE<=-8
                         '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
                     elif len(self.train_data) < 1 and tmp_list['HOLIDAY_RANGE'] >= -7 and tmp_list['HOLIDAY_RANGE'] <= -1:  # 除夕前1周
                         # 获取训练数据（按照分级解除限制的逻辑进行判断）
                         train_list_sql = f'''
@@ -728,7 +729,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                 AND HOLIDAY_RANGE>=-7
                                 AND HOLIDAY_RANGE<=-1
                         '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
                     elif len(self.train_data) < 1 and tmp_list['HOLIDAY_RANGE'] >= 0 and tmp_list['HOLIDAY_RANGE'] <= 5:  # 节中（除夕-初四）
                         # 获取训练数据（按照分级解除限制的逻辑进行判断）
                         train_list_sql = f'''
@@ -740,7 +741,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                     AND HOLIDAY_RANGE>=0
                                     AND HOLIDAY_RANGE<=5
                             '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
                     elif len(self.train_data) < 1 and tmp_list['HOLIDAY_RANGE'] >= 6 and tmp_list['HOLIDAY_RANGE'] <= 10:  # 节后高峰（初五到初九）
                         # 获取训练数据（按照分级解除限制的逻辑进行判断）
                         train_list_sql = f'''
@@ -752,7 +753,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                         AND HOLIDAY_RANGE>=6
                                         AND HOLIDAY_RANGE<=10
                                 '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
                     elif len(self.train_data) < 1 and tmp_list['HOLIDAY_RANGE'] >= 11 and tmp_list[
                         'HOLIDAY_RANGE'] <= 15:  # 初十至十四
                         # 获取训练数据（按照分级解除限制的逻辑进行判断）
@@ -765,7 +766,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                             AND HOLIDAY_RANGE>=11
                                             AND HOLIDAY_RANGE<=15
                                     '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
                     elif len(self.train_data) < 1 and tmp_list['HOLIDAY_RANGE'] == 16:  # 元宵节
                         # 获取训练数据（按照分级解除限制的逻辑进行判断）
                         train_list_sql = f'''
@@ -777,7 +778,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                                 AND HOLIDAY_RANGE>=15
                                                 AND HOLIDAY_RANGE<=17
                                         '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
                     elif len(self.train_data) < 1 and tmp_list['HOLIDAY_RANGE'] > 16:  # 元宵节后
                         # 获取训练数据（按照分级解除限制的逻辑进行判断）
                         train_list_sql = f'''
@@ -788,7 +789,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                                 AND HOL_FALG={tmp_list['HOL_FALG']}
                                                 AND HOLIDAY_RANGE>16
                                         '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
                     else:
                         pass
 
@@ -803,7 +804,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                 AND HOL_FALG={tmp_list['HOL_FALG']}
                                 AND HOLIDAY_RANGE<=-1
                         '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
                     elif len(self.train_data) < 1 and tmp_list['HOLIDAY_RANGE'] >= 6:
                         # 获取训练数据（按照分级解除限制的逻辑进行判断）
                         train_list_sql = f'''
@@ -814,7 +815,7 @@ class SoloFlightNumberIncreaseKNN(object):
                                 AND HOL_FALG={tmp_list['HOL_FALG']}
                                 AND HOLIDAY_RANGE>=6
                         '''
-                        self.train_data = get_predict_data(train_list_sql)
+                        self.train_data = get_data(train_list_sql)
 
                     if len(self.train_data) < 1:
                         logging.warning(
@@ -859,9 +860,7 @@ class SoloFlightNumberIncreaseKNN(object):
         target_data = self.train_data.loc[target_index]
         target_data['CREATE_TIME'] = self.config.create_time
         target_data = target_data.iloc[:, :43]
-        insert_predict_data(
-            """INSERT INTO TMP_SOLO_FLIGHT_KNN_TARGET VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30, :31, :32, :33, :34, :35, :36, :37, :38, :39, :40, :41, :42, :43)""",
-            target_data)
+        insert_data("TMP_SOLO_FLIGHT_KNN_TARGET", target_data)
 
         # 将预测数据写回待预测数据（对D0数据进行特殊处理，防止D0样本都是起飞时间靠后的样本，导致D0人数增量预测偏高）/
         for i, col in enumerate(self.Y_label_col):
@@ -875,8 +874,8 @@ class SoloFlightNumberIncreaseKNN(object):
 
     def worker(self, i):
         data = pd.DataFrame()
-        tmp_sql = f"SELECT * FROM {self.config.solo_flight_advice_price_knn_predict_list} WHERE HX = {i + 1}"
-        knn_list = get_data("oracle", data_sql=tmp_sql).iloc[0]
+        tmp_sql = f"SELECT * FROM {SOLO_ADVICE_PRICE_KNN_LIST} WHERE HX = {i + 1}"
+        knn_list = get_data(tmp_sql).iloc[0]
         self.get_data(knn_list)
         if len(self.train_data) != 0:
             self.knn_est(knn_list)
@@ -885,9 +884,9 @@ class SoloFlightNumberIncreaseKNN(object):
 
     def run(self):
         # 利用KNN算法预测当前预售水平下，剩余销售期内最低价格的销售增量
-        delete_predict_data("""DELETE FROM TMP_SOLO_FLIGHT_KNN_TARGET""")
+        delete_data("""DELETE FROM TMP_SOLO_FLIGHT_KNN_TARGET""")
         # if 1 <= self.config.file_create_hour <= 3:
-        #     delete_predict_data("""DELETE FROM TMP_SOLO_FLIGHT_KNN_TARGET""")
+        #     delete_data("""DELETE FROM TMP_SOLO_FLIGHT_KNN_TARGET""")
 
         # 当self.solo_flight_list中数量不足40条时，采用单进程模式，否则触发多进程模式
         if len(self.solo_flight_list) < 40:

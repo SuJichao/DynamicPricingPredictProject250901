@@ -17,17 +17,21 @@ KNN 预测管道基类（v2 重构版）。
       def predict_write_back(self, y_pred, target_index, knn_list): ...
 """
 
+import copy
 import logging
 import multiprocessing as mp
+import os
 import sys
 from multiprocessing import Pool
+
+# 确保项目根目录在 sys.path 中（支持直接运行此文件）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-from common.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
-from data_provider.data_acquisition import get_data
+from common.database_oracle import get_data, delete_data, insert_data
 from blocks.UniversalModule.DataFetchRules import fetch_train_data, fetch_predict_data
 
 
@@ -69,11 +73,11 @@ class KNNBasePredictor:
         self._setup_context()
 
     def _setup_context(self):
-        """将 config 中的表名注入 FETCH_CONTEXT"""
-        ctx = self.FETCH_CONTEXT
-        ctx.train_table = self._get_train_table()
-        ctx.predict_table = self._get_predict_table()
-        ctx.list_table = self._get_list_table()
+        """创建 FETCH_CONTEXT 的实例级副本，避免修改模块级共享单例"""
+        self._ctx = copy.copy(self.FETCH_CONTEXT)
+        self._ctx.train_table = self._get_train_table()
+        self._ctx.predict_table = self._get_predict_table()
+        self._ctx.list_table = self._get_list_table()
 
     # --- 子类覆盖：表名获取 ---
     def _get_train_table(self):
@@ -115,11 +119,11 @@ class KNNBasePredictor:
 
     def fetch_train_data(self, tmp_list):
         """通过规则链获取训练数据"""
-        return fetch_train_data(self.FETCH_CONTEXT, tmp_list)
+        return fetch_train_data(self._ctx, tmp_list)
 
     def fetch_predict_data(self, tmp_list):
         """获取待预测数据"""
-        return fetch_predict_data(self.FETCH_CONTEXT, tmp_list)
+        return fetch_predict_data(self._ctx, tmp_list)
 
     def clean_data(self, data):
         """公共数据清洗：重置索引 → 日期转换 → 特征工程 → 分离 X/Y"""
@@ -187,7 +191,7 @@ class KNNBasePredictor:
         """多进程 worker"""
         data = pd.DataFrame()
         tmp_sql = f"SELECT * FROM {self._get_list_name()} WHERE HX = {i + 1}"
-        knn_list = get_data("oracle", data_sql=tmp_sql).iloc[0]
+        knn_list = get_data(tmp_sql).iloc[0]
         self.predict_data = self.fetch_predict_data(knn_list)
         self.train_data = self.fetch_train_data(knn_list)
         if len(self.train_data) > 0:
@@ -202,7 +206,7 @@ class KNNBasePredictor:
         # 清理临时表
         cleanup_sql = self._get_cleanup_sql()
         if cleanup_sql:
-            delete_predict_data(cleanup_sql)
+            delete_data(cleanup_sql)
 
         knn_list = self._load_knn_list()
 
@@ -250,4 +254,4 @@ class KNNBasePredictor:
 
     def _load_knn_list(self):
         """加载预测列表"""
-        return get_predict_data(f"SELECT * FROM {self._get_list_name()}")
+        return get_data(f"SELECT * FROM {self._get_list_name()}")

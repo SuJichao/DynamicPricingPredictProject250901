@@ -2,7 +2,8 @@ import datetime
 import logging
 import uuid
 
-from common.database_oracle import get_predict_data, delete_predict_data, insert_predict_data, insert_data
+from common.database_oracle import get_data, delete_data, insert_data
+from config.db_tables import FLT_LIST_TABLE
 
 # 数据存储模块
 def data_storage(config, flt_type, result_data):
@@ -21,11 +22,11 @@ def data_storage(config, flt_type, result_data):
     """
     # 每周日上午10点清除累积表360天前的数据
     if config.weekday == 7 and config.file_create_hour == 10:
-        delete_predict_data("""DELETE FROM RM_MXZ_IND_INC_EST_COPY WHERE FLT_DATE<=TRUNC(SYSDATE)-360""")
-        delete_predict_data("""DELETE FROM MAX_MIN_PRICE_OTA_SUG_COPY WHERE FLT_DATE<=TRUNC(SYSDATE)-360""")
-        delete_predict_data("""DELETE FROM TMP_ADVICE_PRICE_DETAIL_COPY WHERE FLT_DATE<=TRUNC(SYSDATE)-360""")
-        delete_predict_data("""DELETE FROM MAX_RETURN_ADVICE_PRICE_COPY WHERE FLT_DATE<=TRUNC(SYSDATE)-360""")
-        delete_predict_data("""DELETE FROM TMP_AGREEMENT_K_DATA_COPY WHERE FLT_DATE<=TRUNC(SYSDATE)-360""")
+        delete_data("""DELETE FROM RM_MXZ_IND_INC_EST_COPY WHERE FLT_DATE<=TRUNC(SYSDATE)-360""")
+        delete_data("""DELETE FROM MAX_MIN_PRICE_OTA_SUG_COPY WHERE FLT_DATE<=TRUNC(SYSDATE)-360""")
+        delete_data("""DELETE FROM TMP_ADVICE_PRICE_DETAIL_COPY WHERE FLT_DATE<=TRUNC(SYSDATE)-360""")
+        delete_data("""DELETE FROM MAX_RETURN_ADVICE_PRICE_COPY WHERE FLT_DATE<=TRUNC(SYSDATE)-360""")
+        delete_data("""DELETE FROM TMP_AGREEMENT_K_DATA_COPY WHERE FLT_DATE<=TRUNC(SYSDATE)-360""")
         logging.info("清除累积表360天前的数据！")
 
     if flt_type == 'SMALL_PART' or flt_type == 'BIG_PART':
@@ -39,23 +40,19 @@ def data_storage(config, flt_type, result_data):
                'MF8888' AS OBJECT_FLT,0 AS IND_BKD_ISSUED_NUM_INC,SRS_ZL_EST AS BKD_ISSUED_NUM_INC,0 AS EXPECTED_RETURN
         FROM SMALL_PART_ADVICE_PRICE_OUTPUT
         """
-        flt_price_advice_result = get_predict_data(tmp_sql)
+        flt_price_advice_result = get_data(tmp_sql)
         if config.data_source == 'oracle':
             flt_price_advice_result['CREATE_TIME'] = datetime.datetime.now()
-            delete_predict_data(
-                f"""DELETE FROM TMP_MAX_RETURN_ADVICE_PRICE_V2 WHERE FLT_SEGMENT IN (SELECT FLT_SEGMENT FROM {config.flt_list} WHERE FLT_TYPE='{flt_type}')""")
-            delete_predict_data("""DELETE FROM TMPTMP_MAX_RETURN_ADVICE_PRICE""")
-            insert_predict_data(
-                """INSERT INTO MAX_RETURN_ADVICE_PRICE_COPY VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28)""",
-                flt_price_advice_result)
+            delete_data(
+                f"""DELETE FROM TMP_MAX_RETURN_ADVICE_PRICE_V2 WHERE FLT_SEGMENT IN (SELECT FLT_SEGMENT FROM {FLT_LIST_TABLE} WHERE FLT_TYPE='{flt_type}')""")
+            delete_data("""DELETE FROM TMPTMP_MAX_RETURN_ADVICE_PRICE""")
+            insert_data("MAX_RETURN_ADVICE_PRICE_COPY", flt_price_advice_result)
             flt_price_advice_result['PID'] = uuid.uuid1()
             for i in range(len(flt_price_advice_result)):
                 flt_price_advice_result.at[i, 'PID'] = uuid.uuid1()
             flt_price_advice_result['PID'] = flt_price_advice_result['PID'].astype('str')
             # 先插入临时表
-            insert_predict_data(
-                """INSERT INTO TMPTMP_MAX_RETURN_ADVICE_PRICE VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29)""",
-                flt_price_advice_result)
+            insert_data("TMPTMP_MAX_RETURN_ADVICE_PRICE", flt_price_advice_result)
             # 完成航段信息回溯
             tmp_sql = """
                 SELECT B.CATCH_DATE,B.EX_DIF,B.TIME_PT,B.FLT_DATE,B.AIR_CODE,B.FLT_NO,A.DEP||A.ARR AS FLT_SEGMENT,B.FLT_ROUTE,
@@ -74,48 +71,36 @@ def data_storage(config, flt_type, result_data):
                 WHERE B.FLT_DATE IS NOT NULL
                 ORDER BY B.FLT_SEGMENT,B.FLT_DATE,B.DEP_HOUR
             """
-            tmp_data = get_predict_data(tmp_sql)
-            insert_predict_data(
-                """INSERT INTO TMP_MAX_RETURN_ADVICE_PRICE_V2 VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29)""",
-                tmp_data)
+            tmp_data = get_data(tmp_sql)
+            insert_data("TMP_MAX_RETURN_ADVICE_PRICE_V2", tmp_data)
 
     elif flt_type == 'SOLO_PART':
         # # 1 价格扩展结果
         # tmp_full_fare_knn_data = result_data['tmp_full_fare_knn_data']
-        # delete_predict_data("""DELETE FROM TMP_SOLO_FLT_PRICE_EXTENSION""")
-        # insert_predict_data(
-        #     """INSERT INTO TMP_SOLO_FLT_PRICE_EXTENSION VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30, :31, :32, :33, :34, :35, :36)""",
-        #     tmp_full_fare_knn_data)
+        # delete_data("""DELETE FROM TMP_SOLO_FLT_PRICE_EXTENSION""")
+        # insert_data("TMP_SOLO_FLT_PRICE_EXTENSION", tmp_full_fare_knn_data)
         #
         # # 2 价格扩展明细
         # tmp_advice_price_detail = result_data['tmp_advice_price_detail']
-        # delete_predict_data(
-        #     f"""DELETE FROM TMP_ADVICE_PRICE_DETAIL WHERE FLT_SEGMENT IN (SELECT FLT_SEGMENT FROM {config.flt_list} WHERE FLT_TYPE='{flt_type}')""")
-        # insert_predict_data(
-        #     """INSERT INTO TMP_ADVICE_PRICE_DETAIL VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30, :31, :32, :33, :34, :35)""",
-        #     tmp_advice_price_detail)
-        # insert_predict_data(
-        #     """INSERT INTO TMP_ADVICE_PRICE_DETAIL_COPY VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30, :31, :32, :33, :34, :35)""",
-        #     tmp_advice_price_detail)
+        # delete_data(
+        #     f"""DELETE FROM TMP_ADVICE_PRICE_DETAIL WHERE FLT_SEGMENT IN (SELECT FLT_SEGMENT FROM {FLT_LIST_TABLE} WHERE FLT_TYPE='{flt_type}')""")
+        # insert_data("TMP_ADVICE_PRICE_DETAIL", tmp_advice_price_detail)
+        # insert_data("TMP_ADVICE_PRICE_DETAIL_COPY", tmp_advice_price_detail)
 
         # 3 预测结果
         solo_flt_advice_price_result = result_data['solo_flt_advice_price_result']
         if config.data_source == 'oracle':
             solo_flt_advice_price_result['CREATE_TIME'] = datetime.datetime.now()
-            delete_predict_data(
-                f"""DELETE FROM TMP_MAX_RETURN_ADVICE_PRICE_V2 WHERE FLT_SEGMENT IN (SELECT FLT_SEGMENT FROM {config.flt_list} WHERE FLT_TYPE='SOLO_PART')""")
-            delete_predict_data("""DELETE FROM TMPTMP_MAX_RETURN_ADVICE_PRICE""")
-            insert_predict_data(
-                """INSERT INTO MAX_RETURN_ADVICE_PRICE_COPY VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28)""",
-                solo_flt_advice_price_result)
+            delete_data(
+                f"""DELETE FROM TMP_MAX_RETURN_ADVICE_PRICE_V2 WHERE FLT_SEGMENT IN (SELECT FLT_SEGMENT FROM {FLT_LIST_TABLE} WHERE FLT_TYPE='SOLO_PART')""")
+            delete_data("""DELETE FROM TMPTMP_MAX_RETURN_ADVICE_PRICE""")
+            insert_data("MAX_RETURN_ADVICE_PRICE_COPY", solo_flt_advice_price_result)
             solo_flt_advice_price_result['PID'] = uuid.uuid1()
             for i in range(len(solo_flt_advice_price_result)):
                 solo_flt_advice_price_result.at[i, 'PID'] = uuid.uuid1()
             solo_flt_advice_price_result['PID'] = solo_flt_advice_price_result['PID'].astype('str')
             # 先插入临时表
-            insert_predict_data(
-                """INSERT INTO TMPTMP_MAX_RETURN_ADVICE_PRICE VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29)""",
-                solo_flt_advice_price_result)
+            insert_data("TMPTMP_MAX_RETURN_ADVICE_PRICE", solo_flt_advice_price_result)
             # 完成航段信息回溯
             tmp_sql = """
                 SELECT B.CATCH_DATE,B.EX_DIF,B.TIME_PT,B.FLT_DATE,B.AIR_CODE,B.FLT_NO,A.DEP||A.ARR AS FLT_SEGMENT,B.FLT_ROUTE,
@@ -133,10 +118,8 @@ def data_storage(config, flt_type, result_data):
                 WHERE B.FLT_DATE IS NOT NULL
                 ORDER BY B.FLT_SEGMENT,B.FLT_DATE,B.DEP_HOUR
             """
-            tmp_data = get_predict_data(tmp_sql)
-            insert_predict_data(
-                """INSERT INTO TMP_MAX_RETURN_ADVICE_PRICE_v2 VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29)""",
-                tmp_data)
+            tmp_data = get_data(tmp_sql)
+            insert_data("TMP_MAX_RETURN_ADVICE_PRICE_v2", tmp_data)
     else:
         pass
 

@@ -7,8 +7,7 @@ import logging
 import numpy as np
 
 from config.config import get_argparse
-from common.database_oracle import delete_predict_data
-from data_provider.data_acquisition import get_data
+from common.database_oracle import get_data, delete_data
 from common.get_logger import get_logger
 from common.send_mail import send_mail
 
@@ -21,16 +20,16 @@ def data_timeliness(args):
     minute = args.file_create_minute
 
     # 采集数据最新批次
-    now_catch_time = get_data("oracle", data_sql='SELECT MAX(CATCH_TIME) FROM KD_FUTURE_TMP_SJC_NEW').values[0][0]
+    now_catch_time = get_data('SELECT MAX(CATCH_TIME) FROM KD_FUTURE_TMP_SJC_NEW').values[0][0]
     # 采集数据最新数据创建时间
-    now_create_time = get_data("oracle", data_sql='SELECT MAX(UP_DATE) FROM KD_FUTURE_TMP_SJC_NEW').values[0][0]
+    now_create_time = get_data('SELECT MAX(UP_DATE) FROM KD_FUTURE_TMP_SJC_NEW').values[0][0]
     # 预测结果表（最新）
-    result_data = get_data("oracle", data_sql='SELECT * FROM TMP_MAX_RETURN_ADVICE_PRICE')
+    result_data = get_data('SELECT * FROM TMP_MAX_RETURN_ADVICE_PRICE')
     # 当处于夜间托管时间范围 | 表中数据创建时间已过去11分钟 | 预测结果表存在数据 时，删除预测结果表数据
     if (args.file_create_hour >= 18 or args.file_create_hour <= 7) and (
             ((np.datetime64(args.create_time) - np.datetime64(now_create_time)) / np.timedelta64(1, 'm')).astype(
                     int) >= 11) and len(result_data) > 0:
-        delete_predict_data(f"DELETE FROM TMP_MAX_RETURN_ADVICE_PRICE")
+        delete_data(f"DELETE FROM TMP_MAX_RETURN_ADVICE_PRICE")
         logging.warning('预测结果数据过期，将结果表数据删除，防止误执行。')
 
     # 获取当前时间应该有的最新数据时间戳标记（一旦最小采集频率有变化，就要修改此处代码）
@@ -44,8 +43,7 @@ def data_timeliness(args):
 
     # 根据当前应该有的时间戳看采集源头表是否数据，如果有，则执行，否则跳过。
     catch_time = f'{hour}:{minute}'
-    tmp_time_flag = get_data("oracle",
-                             data_sql=f"SELECT * FROM TB_DAQ_LOG WHERE CATCH_DATE=DATE'{date}' AND CATCH_TIME='{catch_time}' AND TITLE='已整合'")
+    tmp_time_flag = get_data(f"SELECT * FROM TB_DAQ_LOG WHERE CATCH_DATE=DATE'{date}' AND CATCH_TIME='{catch_time}' AND TITLE='已整合'")
     if tmp_time_flag.empty or now_catch_time == catch_time:
         return False
     else:
@@ -55,7 +53,7 @@ def catch_data_timeliness():
     args = get_argparse()
     get_logger()
     # 采集数据最新数据创建时间
-    now_create_time = get_data("oracle", data_sql='SELECT MAX(UP_DATE) FROM KD_FUTURE_TMP_SJC_NEW').values[0][0]
+    now_create_time = get_data('SELECT MAX(UP_DATE) FROM KD_FUTURE_TMP_SJC_NEW').values[0][0]
     # 获取当前系统时间和数据采集时间
     sysdate = np.datetime64(args.create_time)
     catch_time = np.datetime64(now_create_time)

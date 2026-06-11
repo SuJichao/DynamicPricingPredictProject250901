@@ -6,6 +6,7 @@
     "python.terminal.activateEnvInCurrentTerminal": true,
     "python.terminal.launchArgs": [],
     "terminal.integrated.env.windows": {
-        "PATH": "D:\\CodeStarge\\venvs\\instantclient_19_9;${env:PATH}"
+        "PATH": "D:\\CodeStarge\\venvs\\instantclient_19_9;${env:PATH}",
+    "workbench.editor.enablePreview": false
     }
 }

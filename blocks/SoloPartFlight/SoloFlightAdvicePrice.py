@@ -9,7 +9,8 @@ import pandas as pd
 
 from config.config import get_argparse
 from config.pricing_constants import *
-from data_provider.data_acquisition import get_data
+from config.db_tables import (SOLO_SALES_RATIO_SQL, SOLO_BOTTOM_PRICE_TABLE, SOLO_PREVIOUS_PRICE_TABLE, RB_OTA_DATA_SQL, SOLO_CHUNYUN_ZFX_LIST)
+from common.database_oracle import get_data, insert_data
 from blocks.SoloPartFlight.SoloBkdSharpRise import bkd_sharp_rise
 
 
@@ -19,7 +20,7 @@ class SoloFltAdvicePrice(object):
         # 获取独飞航线在最低价水平下的人数增量预测结果
         self.bottom_price_demand = bottom_price_demand
         # 获取库存限制数据（目前只有D0-2的航班数据）
-        self.sales_ratio = get_data("oracle", data_sql=self.config.sales_ratio)
+        self.sales_ratio = get_data(SOLO_SALES_RATIO_SQL)
         self.sales_ratio = self.sales_ratio[['FLT_DATE', 'EX_DIF', 'FLT_NO', 'FLT_SEGMENT', 'MF_ZL_AHEAD']]
         self.bottom_price_demand = pd.merge(self.bottom_price_demand, self.sales_ratio, on=['FLT_DATE', 'EX_DIF', 'FLT_NO', 'FLT_SEGMENT'], how='left')
         self.bottom_price_demand['MF_ZL_AHEAD'].fillna(0, inplace=True)
@@ -34,17 +35,17 @@ class SoloFltAdvicePrice(object):
         # )
 
         # 获取独飞航班最低价格表（目前只对D0-1的独飞航班做限制，防止价格倒放）
-        self.solo_bottom_price = get_data("oracle", data_sql=f"SELECT CATCH_DATE,FLT_DATE,EX_DIF,FLT_NO,FLT_SEGMENT,PRICE FROM {self.config.solo_bottom_price}")
+        self.solo_bottom_price = get_data(f"SELECT CATCH_DATE,FLT_DATE,EX_DIF,FLT_NO,FLT_SEGMENT,PRICE FROM {SOLO_BOTTOM_PRICE_TABLE}")
         # 获取独飞航班上一时点的外放价格（目前只有D0-7的航班数据）
         self.solo_previous_price = get_data("oracle",
-                                            data_sql=f"SELECT CATCH_DATE,EX_DIF,FLT_DATE,CARRIER,FLT_NO,FLT_SEGMENT,DEP_TIME,BKD_OLD,PRICE_OTA_OLD FROM {self.config.solo_previous_price}")
+                                            data_sql=f"SELECT CATCH_DATE,EX_DIF,FLT_DATE,CARRIER,FLT_NO,FLT_SEGMENT,DEP_TIME,BKD_OLD,PRICE_OTA_OLD FROM {SOLO_PREVIOUS_PRICE_TABLE}")
         # 获取当前OTA外放价格水平
-        self.rb_ota_data = get_data("oracle", data_sql=self.config.rb_ota_data)
+        self.rb_ota_data = get_data(RB_OTA_DATA_SQL)
 
         self.tmp_full_fare_knn_data = None
         self.solo_flt_advice_price = None
-        self.solo_flight_bottom_discount = config.solo_flight_bottom_discount
-        self.chunyun_zfx_list = get_data("oracle", data_sql=f"SELECT T_DATE AS FLT_DATE,HC AS FLT_SEGMENT,正反向标识 FROM {self.config.chunyun_zfx_list} WHERE 正反向标识='正向'")
+        self.solo_flight_bottom_discount = SOLO_FLT_BOTTOM_DISCOUNT
+        self.chunyun_zfx_list = get_data(f"SELECT T_DATE AS FLT_DATE,HC AS FLT_SEGMENT,正反向标识 FROM {SOLO_CHUNYUN_ZFX_LIST} WHERE 正反向标识='正向'")
         logging.info(f"【SoloFltAdvicePrice】{self.config.version_number} 程序开始！")
         self.solo_flt_max_min_price()
 
@@ -57,7 +58,7 @@ class SoloFltAdvicePrice(object):
         # 获取价格扩展列表
         self.bottom_price_demand['PRICE'].fillna(SOLO_FLT_FULL_PRICE_FALLBACK, inplace=True) # 防止全票价数据缺失
         # 独飞历史1天销售数据
-        tmp_solo_flt_sales_price = get_data("oracle", data_sql='SELECT FLT_DATE,CARRIER,FLT_NO,FLT_SEGMENT,SRS_SALES,PJPJ_SALES,T_FLAG FROM TMP_DP_SOLO_SRS_HIS_PH')
+        tmp_solo_flt_sales_price = get_data('SELECT FLT_DATE,CARRIER,FLT_NO,FLT_SEGMENT,SRS_SALES,PJPJ_SALES,T_FLAG FROM TMP_DP_SOLO_SRS_HIS_PH')
         self.bottom_price_demand = pd.merge(self.bottom_price_demand, tmp_solo_flt_sales_price, on=['FLT_DATE', 'CARRIER', 'FLT_NO', 'FLT_SEGMENT'])
         self.bottom_price_demand['PJPJ_SALES'].fillna(0, inplace=True)  # 防止销售票价数据缺失
         # 航班预测客座率
@@ -142,16 +143,7 @@ class SoloFltAdvicePrice(object):
        'BKD_DEP', 'BKD_ARR', 'CREATE_TIME', 'DEP_TIME', 'YEAR', 'MF_ZL_AHEAD',
        'SRS_SALES', 'PJPJ_SALES', 'T_FLAG', 'BKD_PLF_EST', 'SYZW_PLF',
        'SRS_ZL_LEFT', 'BKD_INCOME_LEFT', 'AI_ADVICE_PRICE']]
-        insert_predict_data(
-            """INSERT INTO SOLO_FLIGHT_ADVICE_DATA_COPY VALUES(
-                    :1, :2, :3, :4, :5, :6, :7, :8, :9, :10,  -- 1-10
-                    :11, :12, :13, :14, :15, :16, :17, :18, :19, :20,  -- 11-20
-                    :21, :22, :23, :24, :25, :26, :27, :28, :29, :30,  -- 21-30
-                    :31, :32, :33, :34, :35, :36, :37, :38, :39, :40,  -- 31-40
-                    :41, :42, :43, :44, :45, :46, :47, :48, :49, :50,  -- 41-50
-                    :51  -- 51-52
-                )""",
-            tmp_data)
+        insert_data("SOLO_FLIGHT_ADVICE_DATA_COPY", tmp_data)
 
 
 if __name__ == '__main__':

@@ -11,15 +11,18 @@
 
 import logging
 import multiprocessing as mp
+import os
 import sys
+
+# 确保项目根目录在 sys.path 中（支持直接运行此文件）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import numpy as np
 import pandas as pd
 
-from config.pricing_constants import (
-    SOLO_FLT_KNN_NORMAL_K, SOLO_FLT_KNN_HOLIDAY_K, SOLO_FLT_KNN_SPRING_FESTIVAL_K
-)
-from common.database_oracle import get_data, delete_data, insert_predict_data
+from config.pricing_constants import (SOLO_FLT_KNN_NORMAL_K, SOLO_FLT_KNN_HOLIDAY_K, SOLO_FLT_KNN_SPRING_FESTIVAL_K, SOLO_KNN_FEATURE_COLS, SOLO_KNN_TARGET_COLS)
+from config.db_tables import (SOLO_ADVICE_PRICE_TRAIN_TABLE, SOLO_ADVICE_PRICE_PREDICT_TABLE, SOLO_ADVICE_PRICE_KNN_LIST)
+from common.database_oracle import insert_data
 from model.KNeighborsRegressor_v2 import SoloFltKnnRegressorFunction_v2
 from blocks.UniversalModule.KNNBasePredictor import KNNBasePredictor
 from blocks.UniversalModule.DataFetchRules import SOLO_FLT_FETCH_CONTEXT
@@ -37,32 +40,27 @@ class SoloFlightNumberIncreaseKNN_v2(KNNBasePredictor):
     FETCH_CONTEXT = SOLO_FLT_FETCH_CONTEXT
 
     def __init__(self, config):
-        self.config = config
-        self.train_data = pd.DataFrame()
-        self.predict_data = pd.DataFrame()
-        self.tmp_data = None
-        self.result_data = pd.DataFrame()
+        super().__init__(config)
 
         # 独飞特有的属性
-        self.X_label_col = config.solo_x_label_col.split(",")
-        self.Y_label_col = config.solo_y_label_col.split(",")
+        self.X_label_col = list(SOLO_KNN_FEATURE_COLS)
+        self.Y_label_col = list(SOLO_KNN_TARGET_COLS)
 
-        self._setup_context()
         logging.info(
             f"【SoloFlightNumberIncreaseKNN_v2】{config.version_number} 程序开始！")
 
     # --- 表名获取 ---
     def _get_train_table(self):
-        return self.config.solo_flight_advice_price_train_table
+        return SOLO_ADVICE_PRICE_TRAIN_TABLE
 
     def _get_predict_table(self):
-        return self.config.solo_flight_advice_price_predict_table
+        return SOLO_ADVICE_PRICE_PREDICT_TABLE
 
     def _get_list_table(self):
-        return self.config.solo_flight_advice_price_knn_predict_list
+        return SOLO_ADVICE_PRICE_KNN_LIST
 
     def _get_list_name(self):
-        return self.config.solo_flight_advice_price_knn_predict_list
+        return SOLO_ADVICE_PRICE_KNN_LIST
 
     def _get_cleanup_sql(self):
         return "DELETE FROM TMP_SOLO_FLIGHT_KNN_TARGET"
@@ -96,12 +94,10 @@ class SoloFlightNumberIncreaseKNN_v2(KNNBasePredictor):
         """独飞特有的写回逻辑：插入 TMP_SOLO_FLIGHT_KNN_TARGET + D0 特殊处理"""
 
         # 插入近邻样本数据
-        target_data = self.train_data.loc[target_index]
+        target_data = self.train_data.iloc[target_index]
         target_data['CREATE_TIME'] = self.config.create_time
         target_data = target_data.iloc[:, :43]
-        insert_predict_data(
-            """INSERT INTO TMP_SOLO_FLIGHT_KNN_TARGET VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30, :31, :32, :33, :34, :35, :36, :37, :38, :39, :40, :41, :42, :43)""",
-            target_data)
+        insert_data("TMP_SOLO_FLIGHT_KNN_TARGET", target_data)
 
         # 将预测数据写回待预测数据
         # D0数据特殊处理：防止D0样本都是起飞时间靠后的样本导致人数增量预测偏高
@@ -134,5 +130,6 @@ def solo_knn_est_run(args):
 
 
 if __name__ == '__main__':
+    from config.config import get_argparse
     mp.freeze_support()
-    solo_knn_est_run()
+    solo_knn_est_run(get_argparse())

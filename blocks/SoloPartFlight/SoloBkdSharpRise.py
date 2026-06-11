@@ -11,12 +11,12 @@ import pandas as pd
 
 from config.config import get_argparse
 from config.pricing_constants import *
-from common.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
-from data_provider.data_acquisition import get_data
+from config.db_tables import RB_OTA_DATA_SQL, SOLO_PREVIOUS_PRICE_TABLE
+from common.database_oracle import get_data, delete_data, insert_data
 def bkd_sharp_rise(config, data):
     advice_price_data = data
     # 获取实时外放价格
-    rb_ota_data = get_data("oracle", data_sql=config.rb_ota_data)
+    rb_ota_data = get_data(RB_OTA_DATA_SQL)
     rb_ota_data = rb_ota_data[['FLT_DATE', 'CATCH_DATE', 'FLT_SEGMENT', 'EX_DIF', 'TIME_PT', 'AIR_CODE',
                                'FLT_NO', 'FULL_PRICE', 'AVG_FARE_SK']]
     # 防止外放价格已经到商务舱，触发价格上限缓升
@@ -33,8 +33,8 @@ def bkd_sharp_rise(config, data):
                                        how='left')
 
 
-    solo_previous_price = get_data("oracle", data_sql=f"SELECT EX_DIF AS EX_DIF_OLD,TIME_PT_OLD,FLT_DATE,CARRIER,FLT_NO,FLT_SEGMENT,BKD_OLD,PRICE_OTA_OLD FROM {config.solo_previous_price}")
-    bkd_sluggish_record = get_data("oracle", data_sql=f"SELECT * FROM BKD_SLUGGISH_RECORD")
+    solo_previous_price = get_data(f"SELECT EX_DIF AS EX_DIF_OLD,TIME_PT_OLD,FLT_DATE,CARRIER,FLT_NO,FLT_SEGMENT,BKD_OLD,PRICE_OTA_OLD FROM {SOLO_PREVIOUS_PRICE_TABLE}")
+    bkd_sluggish_record = get_data(f"SELECT * FROM BKD_SLUGGISH_RECORD")
 
     # 【情况1】对订座突增航班进行价格上涨（目前仅限D0-30）
     # solo_previous_price主要用于存储上一采集时点的外放价格和订座人数
@@ -70,9 +70,7 @@ def bkd_sharp_rise(config, data):
     for i in range(len(bkd_sudden_increase_record)):
         bkd_sudden_increase_record.at[i, 'PID'] = uuid.uuid1()
     bkd_sudden_increase_record['PID'] = bkd_sudden_increase_record['PID'].astype('str')
-    insert_predict_data(
-        """INSERT INTO BKD_SUDDEN_INCREASE_RECORD VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11)""",
-        bkd_sudden_increase_record)
+    insert_data("BKD_SUDDEN_INCREASE_RECORD", bkd_sudden_increase_record)
 
     # 删除多次插入的突增数据（旧数据）
     tmp_sql = """
@@ -87,10 +85,10 @@ def bkd_sharp_rise(config, data):
         )WHERE RN!=1
         )
     """
-    delete_predict_data(tmp_sql)
+    delete_data(tmp_sql)
 
     # 当独飞订座突增表中有数据时，维持定价不变，否则回调价格
-    bkd_sudden_increase_record = get_predict_data("SELECT CATCH_DATE,EX_DIF,FLT_DATE,CARRIER,FLT_NO,FLT_SEGMENT,ADVICE_PRICE,PID FROM BKD_SUDDEN_INCREASE_RECORD")
+    bkd_sudden_increase_record = get_data("SELECT CATCH_DATE,EX_DIF,FLT_DATE,CARRIER,FLT_NO,FLT_SEGMENT,ADVICE_PRICE,PID FROM BKD_SUDDEN_INCREASE_RECORD")
     tmp_solo_advice_data = pd.merge(tmp_solo_advice_data, bkd_sudden_increase_record, how='left', on=['CATCH_DATE', 'EX_DIF', 'FLT_DATE', 'CARRIER', 'FLT_NO', 'FLT_SEGMENT'])
     tmp_solo_advice_data['AVG_FARE_SK'] = np.where(tmp_solo_advice_data['ADVICE_PRICE'] > 0,
                                                    np.maximum(tmp_solo_advice_data['ADVICE_PRICE'], tmp_solo_advice_data['AVG_FARE_SK']),

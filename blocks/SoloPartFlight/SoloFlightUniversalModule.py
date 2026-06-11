@@ -11,15 +11,16 @@ import pandas as pd
 
 from config.config import get_argparse
 from config.pricing_constants import *
-from data_provider.data_acquisition import get_data
+from config.db_tables import FLIGHT_PRICE_BOTTOM_SQL
+from common.database_oracle import get_data
 def true_price_up_down(config, flt_type, data):
     logging.info(f"【SoloFltPriceUpDown】{config.version_number} 程序开始！")
     tmp_solo_advice_data = data
     # # 获取实时外放价格
-    # rb_ota_data = get_data("oracle", data_sql=config.rb_ota_data)
+    # rb_ota_data = get_data(config.rb_ota_data)
     # rb_ota_data = rb_ota_data[['FLT_DATE', 'CATCH_DATE', 'FLT_SEGMENT', 'EX_DIF', 'TIME_PT', 'AIR_CODE',
     #                            'FLT_NO', 'FULL_PRICE', 'AVG_FARE_SK']]
-    # sales_ratio = get_data("oracle", data_sql=config.sales_ratio)
+    # sales_ratio = get_data(config.sales_ratio)
     # # 防止外放价格已经到商务舱，触发价格上限缓升
     # rb_ota_data['AVG_FARE_SK'] = np.where(rb_ota_data['AVG_FARE_SK'] > rb_ota_data['FULL_PRICE'],
     #                                       rb_ota_data['FULL_PRICE'], rb_ota_data['AVG_FARE_SK'])
@@ -40,8 +41,8 @@ def true_price_up_down(config, flt_type, data):
                      'AVG_FARE_SK': 'AVG_FARE_SK_y'
                      }, inplace=True)
         tmp_solo_advice_data['AVG_FARE_SK'] = tmp_solo_advice_data['AVG_FARE_SK_x']
-        # solo_previous_price = get_data("oracle", data_sql=f"SELECT EX_DIF AS EX_DIF_OLD,TIME_PT_OLD,FLT_DATE,CARRIER,FLT_NO,FLT_SEGMENT,DEP_TIME,BKD_OLD,PRICE_OTA_OLD FROM {config.solo_previous_price}")
-        # bkd_sluggish_record = get_data("oracle", data_sql=f"SELECT * FROM BKD_SLUGGISH_RECORD")
+        # solo_previous_price = get_data(f"SELECT EX_DIF AS EX_DIF_OLD,TIME_PT_OLD,FLT_DATE,CARRIER,FLT_NO,FLT_SEGMENT,DEP_TIME,BKD_OLD,PRICE_OTA_OLD FROM {config.solo_previous_price}")
+        # bkd_sluggish_record = get_data(f"SELECT * FROM BKD_SLUGGISH_RECORD")
         # # 筛选出有需要的字段，FULL_FARE_VIRTUAL代表建议价格，AVG_FARE_SK代表上一采集点的外放价格
         # tmp_price_advice_result.rename(
         #     columns={'AI_ADVICE_PRICE': 'AVG_FARE_SK_x',
@@ -88,9 +89,7 @@ def true_price_up_down(config, flt_type, data):
         # for i in range(len(bkd_sudden_increase_record)):
         #     bkd_sudden_increase_record.at[i, 'PID'] = uuid.uuid1()
         # bkd_sudden_increase_record['PID'] = bkd_sudden_increase_record['PID'].astype('str')
-        # insert_predict_data(
-        #     """INSERT INTO BKD_SUDDEN_INCREASE_RECORD VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11)""",
-        #     bkd_sudden_increase_record)
+        # insert_data("BKD_SUDDEN_INCREASE_RECORD", bkd_sudden_increase_record)
         #
         # # 删除多次插入的突增数据（旧数据）
         # tmp_sql = """
@@ -105,10 +104,10 @@ def true_price_up_down(config, flt_type, data):
         #     )WHERE RN!=1
         #     )
         # """
-        # delete_predict_data(tmp_sql)
+        # delete_data(tmp_sql)
         #
         # # 当独飞订座突增表中有数据时，维持定价不变，否则回调价格
-        # bkd_sudden_increase_record = get_predict_data("SELECT CATCH_DATE,EX_DIF,FLT_DATE,CARRIER,FLT_NO,FLT_SEGMENT,ADVICE_PRICE,CREATE_TIME,PID FROM BKD_SUDDEN_INCREASE_RECORD")
+        # bkd_sudden_increase_record = get_data("SELECT CATCH_DATE,EX_DIF,FLT_DATE,CARRIER,FLT_NO,FLT_SEGMENT,ADVICE_PRICE,CREATE_TIME,PID FROM BKD_SUDDEN_INCREASE_RECORD")
         # tmp_solo_advice_data = pd.merge(tmp_solo_advice_data, bkd_sudden_increase_record, how='left', on=['CATCH_DATE', 'EX_DIF', 'FLT_DATE', 'CARRIER', 'FLT_NO', 'FLT_SEGMENT'])
         # tmp_solo_advice_data['AVG_FARE_SK'] = np.where(tmp_solo_advice_data['ADVICE_PRICE'] > 0,
         #                                                np.maximum(tmp_solo_advice_data['ADVICE_PRICE'], tmp_solo_advice_data['AVG_FARE_SK']),
@@ -189,7 +188,7 @@ def true_price_up_down(config, flt_type, data):
         # 【情况8】航线兜底底价设置
         # 获取提前设置好的航线兜底价格数据
         tmp_price_advice_result = pd.merge(tmp_price_advice_result,
-                                           get_data("oracle", data_sql=config.flight_price_bottom),
+                                           get_data(FLIGHT_PRICE_BOTTOM_SQL),
                                            on=['FLT_SEGMENT', 'FLT_NO'], how='left')
         # 筛选出在日期范围内的记录
         # 先筛选出没有设置兜底价的数据
@@ -201,7 +200,7 @@ def true_price_up_down(config, flt_type, data):
         tmp_price_advice_result = tmp_price_advice_result.append(isnull_tmp_price_advice)
         # 如果没有单独设置的底价，那独飞航班按折扣计算底价（不低于绝对底价）
         tmp_price_advice_result['PRICE_BOTTOM'].fillna(
-            np.maximum(round_to_10(tmp_price_advice_result['PRICE'] * config.solo_flight_bottom_discount), SOLO_FLT_PRICE_FLOOR_ABSOLUTE),
+            np.maximum(round_to_10(tmp_price_advice_result['PRICE'] * SOLO_FLT_BOTTOM_DISCOUNT), SOLO_FLT_PRICE_FLOOR_ABSOLUTE),
             inplace=True)
         # 最终建议价格不能低于底价
         tmp_price_advice_result['AVG_FARE_SK'] = np.maximum(tmp_price_advice_result['AVG_FARE_SK'], tmp_price_advice_result['PRICE_BOTTOM'])

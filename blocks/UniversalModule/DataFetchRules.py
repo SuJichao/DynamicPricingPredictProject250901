@@ -15,8 +15,14 @@ SoloFlightNumberIncreaseKNN.get_data() 中合计约 1500 行的 if-else 树。
 """
 
 import logging
+import os
+import sys
+
+# 确保项目根目录在 sys.path 中（支持直接运行此文件）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 import pandas as pd
-from common.database_oracle import get_predict_data
+from common.database_oracle import get_data
 
 
 # ============================================================
@@ -244,7 +250,7 @@ class DataFetchRule:
 
     def fetch(self, ctx, tmp_list):
         sql = self._build_sql(ctx, tmp_list)
-        data = get_predict_data(sql)
+        data = get_data(sql)
         if len(data) <= 1 and self.fallback:
             logging.info(
                 f"【DataFetchRules】[{self.name}] 样本不足({len(data)}条)，"
@@ -271,6 +277,7 @@ def make_normal_day_chain(ctx):
               {f"AND HXJG_FLAG={t['HXJG_FLAG']}" if c.normal_levels >= 3 else ""}
               AND HOL_FALG='{t['HOL_FALG']}'
               {c.hpe(t) if c.normal_levels < 3 else ""}
+              {"AND AIR_CODE IN ('MF','NS','RY')" if c.normal_levels < 3 else ""}
               {_season_clause(t)}
         """,
     )
@@ -903,4 +910,4 @@ def fetch_predict_data(ctx, tmp_list):
               AND HOL_LAST={t['HOL_LAST']}
               AND HOLIDAY_RANGE={t['HOLIDAY_RANGE']}
         """
-    return get_predict_data(sql)
+    return get_data(sql)

@@ -26,9 +26,6 @@ SMALL_FLT_PRICE_FLOOR_RATIO = 0.9
 SMALL_FLT_PRICE_FLOOR_ABSOLUTE = 200
 """无自定义底价时，最低价 200 元（约 1-2 折）"""
 
-SMALL_FLT_BOTTOM_DISCOUNT = 0.1
-"""默认底价折扣 1 折（已废弃，目前以绝对底价 200 元为准）"""
-
 
 # ============================================================
 # 独飞航线 (SOLO_PART) 定价参数
@@ -109,6 +106,9 @@ SOLO_MF_LOW_LOAD_MIN_PRICE = 400
 SOLO_FLT_PRICE_FLOOR_ABSOLUTE = 200
 """独飞航班未设置自定义底价时，最低价 200 元"""
 
+SOLO_FLT_BOTTOM_DISCOUNT = 0.1
+"""独飞航线底价折扣 1 折，用于全票价 * 折扣与绝对底价取最大值"""
+
 
 # ============================================================
 # 通用参数
@@ -142,6 +142,51 @@ SOLO_FLT_KNN_HOLIDAY_K = 1
 
 SOLO_FLT_KNN_SPRING_FESTIVAL_K = 1
 """独飞航线春运 K 值"""
+
+
+# ----- KNN 特征/目标列名 -----
+
+SMALL_PART_KNN_TARGET_COLS = ('KZL_ZL_MF', 'KZL_ZL_IND')
+"""小份额航线 KNN 预测目标列"""
+
+SMALL_PART_KNN_FEATURE_COLS = (
+    'date_sin', 'date_cos', 'HOL_LAST', 'TIME_PT', 'DEP_HOUR',
+    'CAP', 'BKD_SK', 'PJPJ', 'chunjie_sin',
+)
+"""小份额航线 KNN 特征列"""
+
+SMALL_PART_KNN_OUTPUT_COLS = (
+    'CATCH_DATE', 'FLT_DATE', 'EX_DIF', 'TIME_PT', 'AIR_CODE', 'FLT_NO',
+    'FLT_SEGMENT', 'FLT_ROUTE', 'DEP_HOUR', 'DEP_MINUTE', 'CAP', 'DISCAP',
+    'BKD_LEFT', 'BKD', 'GRS', 'BKD_SK', 'PJPJ', 'SZS_ZL', 'HXJG_FLAG',
+    'DOW', 'CAP_FINAL', 'CAP_IND_FINAL', 'KZL_ZL_MF',
+    'KZL_ZL_IND', 'PRICE', 'ARTIFICIAL_CAP_LEFT', 'CAP_LEFT',
+)
+"""小份额航线 KNN 输出列"""
+
+SOLO_KNN_FEATURE_COLS = (
+    'YEAR', 'date_sin', 'date_cos', 'HOL_LAST', 'TIME_PT', 'chunjie_sin',
+)
+"""独飞航线 KNN 特征列"""
+
+SOLO_KNN_TARGET_COLS = (
+    'SRS_ZL_DETR_LEFT', 'PJPJ_MIN', 'EX_DIF', 'PJPJ_FINAL',
+)
+"""独飞航线 KNN 预测目标列"""
+
+
+# ============================================================
+# 进程执行时序控制
+# ============================================================
+
+TIMING_MIN_EXECUTION_SECONDS = 5
+"""进程从参数解析到此处耗时少于此值，判定前序进程尚未结束，须等待"""
+
+TIMING_SLEEP_SECONDS = 20
+"""判定前序进程未结束时，暂停等待的秒数"""
+
+TIMING_MAX_EXECUTION_SECONDS = 901
+"""进程执行时间超过此值（约15分钟），自动跳过本次执行"""
 
 
 # ============================================================

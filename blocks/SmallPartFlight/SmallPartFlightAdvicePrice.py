@@ -5,11 +5,11 @@ import pandas as pd
 
 from config.config import get_argparse
 from config.pricing_constants import *
+from config.db_tables import SMALL_PART_MAX_MIN_PRICE_SQL, FLIGHT_PRICE_BOTTOM_SQL
 
 # 注意：knn_run 的导入已移到函数内部，根据 args.use_v2_predictor 动态选择
 from common.get_logger import get_logger
-from common.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
-from data_provider.data_acquisition import get_data
+from common.database_oracle import get_data, delete_data, insert_data
 import schedule
 
 
@@ -50,7 +50,7 @@ def small_part_flight_advice_price(args):
         )
         WHERE RANK1=1 AND CARRIER IN ('MF','NS','RY')
     """
-    flt_psg_choice = get_predict_data(tmp_sql)
+    flt_psg_choice = get_data(tmp_sql)
     flt_price = pd.merge(flt_cap_ctrl, flt_psg_choice, on=['CATCH_DATE', 'FLT_DATE', 'EX_DIF', 'AIR_CODE', 'FLT_NO', 'FLT_SEGMENT'], how='left')[['CATCH_DATE', 'FLT_DATE', 'EX_DIF', 'DOW', 'TIME_PT', 'AIR_CODE', 'FLT_NO',
            'FLT_SEGMENT', 'FLT_ROUTE', 'DEP_HOUR', 'DEP_MINUTE', 'CAP', 'DISCAP', 'PRICE',
            'BKD_LEFT', 'BKD', 'GRS', 'BKD_SK', 'PJPJ', 'HXJG_FLAG',
@@ -72,7 +72,7 @@ def small_part_flight_advice_price(args):
     #                                     1
     #                                     )
     # 锚定特殊底价航班
-    flt_price = pd.merge(flt_price, get_data("oracle", data_sql=args.flight_price_bottom),
+    flt_price = pd.merge(flt_price, get_data(FLIGHT_PRICE_BOTTOM_SQL),
                                        on=['FLT_SEGMENT', 'FLT_NO'], how='left')
     # 筛选出在日期范围内的记录
     # 先筛选出没有设置兜底价的数据
@@ -159,7 +159,7 @@ def small_part_flight_advice_price(args):
                                                                       np.minimum(flt_price['PJPJ'] * flt_price['SALES_SLOPE'], flt_price['PJPJ'] + flt_price['PRICE'] * SMALL_FLT_PRICE_UP_NORMAL_PCT))
                                                              ))
 
-    flt_price = pd.merge(flt_price, get_data("oracle", data_sql=args.SmallPartMaxMInPrice),
+    flt_price = pd.merge(flt_price, get_data(SMALL_PART_MAX_MIN_PRICE_SQL),
                          on=['FLT_DATE', 'FLT_NO', 'AIR_CODE', 'FLT_SEGMENT'],
                          how='left')
     np.where(flt_price['AI_ADVICE_PRICE'] < flt_price['MIN_PRICE'],
@@ -179,11 +179,9 @@ def small_part_flight_advice_price(args):
        'KZL_ZL_IND', 'ARTIFICIAL_CAP_LEFT', 'CAP_LEFT_NEW', 'SRS_ZL',
        'PSG_CHO_PROB', 'SRS_ZL_EST', 'SALES_SLOPE', 'AI_ADVICE_PRICE', 'CREATE_TIME', 'TMP_ADVICE_PRICE']]
     # 保存定价数据
-    delete_predict_data("""DELETE FROM SMALL_PART_ADVICE_PRICE_OUTPUT""")
+    delete_data("""DELETE FROM SMALL_PART_ADVICE_PRICE_OUTPUT""")
     # 插入实时数据
-    insert_predict_data(
-        """INSERT INTO SMALL_PART_ADVICE_PRICE_OUTPUT VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30, :31, :32, :33)""",
-        flt_price)
+    insert_data("SMALL_PART_ADVICE_PRICE_OUTPUT", flt_price)
     # 调整经停长短定价
     tmp_sql = """
     SELECT A.CATCH_DATE,A.FLT_DATE,A.EX_DIF,A.DOW,A.TIME_PT,A.AIR_CODE,A.FLT_NO,A.FLT_SEGMENT,A.FLT_ROUTE,
@@ -205,17 +203,13 @@ def small_part_flight_advice_price(args):
     )B
     ON A.FLT_ROUTE=B.FLT_ROUTE AND A.FLT_NO=B.FLT_NO AND A.EX_DIF=B.EX_DIF
     """
-    flt_price = get_predict_data(tmp_sql)
+    flt_price = get_data(tmp_sql)
 
-    delete_predict_data("""DELETE FROM SMALL_PART_ADVICE_PRICE_OUTPUT""")
-    insert_predict_data(
-        """INSERT INTO SMALL_PART_ADVICE_PRICE_OUTPUT VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30, :31, :32, :33)""",
-        flt_price)
+    delete_data("""DELETE FROM SMALL_PART_ADVICE_PRICE_OUTPUT""")
+    insert_data("SMALL_PART_ADVICE_PRICE_OUTPUT", flt_price)
 
     # 插入累积观察数据
-    insert_predict_data(
-        """INSERT INTO SMALL_PART_ADVICE_PRICE_COPY VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30, :31, :32, :33)""",
-        flt_price)
+    insert_data("SMALL_PART_ADVICE_PRICE_COPY", flt_price)
     return flt_price
 
 def run():

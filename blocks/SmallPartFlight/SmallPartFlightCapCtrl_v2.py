@@ -11,15 +11,19 @@
 
 import logging
 import multiprocessing as mp
+import os
 import sys
 import warnings
+
+# 确保项目根目录在 sys.path 中（支持直接运行此文件）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import numpy as np
 import pandas as pd
 
-from config.pricing_constants import SMALL_FLT_KNN_NORMAL_K, SMALL_FLT_KNN_HOLIDAY_K
-from common.database_oracle import get_predict_data, delete_predict_data, insert_predict_data
-from data_provider.data_acquisition import get_data
+from config.pricing_constants import (SMALL_FLT_KNN_NORMAL_K, SMALL_FLT_KNN_HOLIDAY_K, SMALL_PART_KNN_TARGET_COLS, SMALL_PART_KNN_FEATURE_COLS, SMALL_PART_KNN_OUTPUT_COLS)
+from config.db_tables import (SMALL_PART_KNN_LOG_TABLE, SMALL_PART_KNN_TRAIN_TABLE, SMALL_PART_KNN_PREDICT_TABLE, SMALL_PART_KNN_PREDICT_LIST)
+from common.database_oracle import get_data, delete_data, insert_data
 from common.get_logger import get_logger
 from model.KNeighborsRegressor_v2 import SmallFltKnnRegressorFunction_v2
 from blocks.UniversalModule.KNNBasePredictor import KNNBasePredictor
@@ -41,34 +45,29 @@ class FlightCapControlKnn_v2(KNNBasePredictor):
     NEED_EST_DATA_SAME = True
 
     def __init__(self, config):
-        self.config = config
-        self.train_data = pd.DataFrame()
-        self.predict_data = pd.DataFrame()
-        self.tmp_data = None
-        self.result_data = pd.DataFrame()
+        super().__init__(config)
 
         # 小份额特有的属性
-        self.X_label_col = config.FlightCapControlKnnParameter.split(",")
-        self.Y_label_col = config.PredictLabel.split(",")
-        self.output_columns = config.FlightCapControlKnnOutput.split(",")
-        self.log_name = config.FlightCapControlKnnLog
+        self.X_label_col = list(SMALL_PART_KNN_FEATURE_COLS)
+        self.Y_label_col = list(SMALL_PART_KNN_TARGET_COLS)
+        self.output_columns = list(SMALL_PART_KNN_OUTPUT_COLS)
+        self.log_name = SMALL_PART_KNN_LOG_TABLE
 
-        self._setup_context()
         logging.info(
             f"【FlightCapControlKnn_v2】{config.version_number} 程序开始！")
 
     # --- 表名获取 ---
     def _get_train_table(self):
-        return self.config.FlightCapControlKnnTrainData
+        return SMALL_PART_KNN_TRAIN_TABLE
 
     def _get_predict_table(self):
-        return self.config.FlightCapControlKnnPredictData
+        return SMALL_PART_KNN_PREDICT_TABLE
 
     def _get_list_table(self):
-        return self.config.FlightCapControlKnnPredictList
+        return SMALL_PART_KNN_PREDICT_LIST
 
     def _get_list_name(self):
-        return self.config.FlightCapControlKnnPredictList
+        return SMALL_PART_KNN_PREDICT_LIST
 
     def _get_cleanup_sql(self):
         return "DELETE FROM TMP_SELECT_HIS_DEMO"
@@ -90,12 +89,10 @@ class FlightCapControlKnn_v2(KNNBasePredictor):
         """小份额特有的写回逻辑：插入 TMP_SELECT_HIS_DEMO + 客座率增量计算"""
 
         # 插入近邻样本数据
-        target_data = self.train_data.loc[target_index]
+        target_data = self.train_data.iloc[target_index]
         target_data = target_data.iloc[:, :36]
         target_data.loc[:, 'HX'] = knn_list.iloc[0] if hasattr(knn_list, 'iloc') else knn_list[0]
-        insert_predict_data(
-            """INSERT INTO TMP_SELECT_HIS_DEMO VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30, :31, :32, :33, :34, :35, :36, :37)""",
-            target_data)
+        insert_data("TMP_SELECT_HIS_DEMO", target_data)
 
         hx_val = knn_list.iloc[0] if hasattr(knn_list, 'iloc') else knn_list[0]
 
@@ -122,7 +119,7 @@ class FlightCapControlKnn_v2(KNNBasePredictor):
            AND C.EX_DIF*24-C.TIME_PT BETWEEN A.EX_DIF_END*24-A.TIME_PT_END AND A.EX_DIF_START*24-A.TIME_PT_START
         GROUP BY A.CATCH_DATE,A.FLT_DATE,A.EX_DIF,A.TIME_PT,A.AIR_CODE,A.FLT_NO,A.FLT_SEGMENT,A.FLT_ROUTE,A.DEP_HOUR,A.DEP_MINUTE,A.CAP,A.DISCAP,A.PRICE,A.BKD,A.GRS,A.BKD_SK,A.PJPJ
         """
-        tmp_result = get_predict_data(tmp_sql)
+        tmp_result = get_data(tmp_sql)
 
         # 将预测数据写回待预测数据
         for i, col in enumerate(self.Y_label_col):
@@ -153,9 +150,7 @@ def knn_run(args):
     show_data = model.run()
 
     # 插入结果表
-    insert_predict_data(
-        """INSERT INTO SMALL_FLT_CAP_CONTRAL_RESULT VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27)""",
-        show_data)
+    insert_data("SMALL_FLT_CAP_CONTRAL_RESULT", show_data)
 
     # 更新经停航班 CAP_LEFT（与原逻辑完全一致）
     tmp_sql = f"""
@@ -181,11 +176,9 @@ def knn_run(args):
     )C
     ON A.CATCH_DATE=C.CATCH_DATE AND A.FLT_DATE=C.FLT_DATE AND A.EX_DIF=C.EX_DIF AND A.TIME_PT=C.TIME_PT AND A.AIR_CODE=C.AIR_CODE AND A.FLT_NO=C.FLT_NO AND A.FLT_ROUTE=C.FLT_ROUTE
     """
-    tmp_result = get_predict_data(tmp_sql)
-    delete_predict_data("DELETE FROM SMALL_FLT_CAP_CONTRAL_RESULT2")
-    insert_predict_data(
-        """INSERT INTO SMALL_FLT_CAP_CONTRAL_RESULT2 VALUES(:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28)""",
-        tmp_result)
+    tmp_result = get_data(tmp_sql)
+    delete_data("DELETE FROM SMALL_FLT_CAP_CONTRAL_RESULT2")
+    insert_data("SMALL_FLT_CAP_CONTRAL_RESULT2", tmp_result)
 
     return tmp_result
 

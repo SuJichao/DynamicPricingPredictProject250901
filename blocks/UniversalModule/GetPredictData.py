@@ -2,14 +2,14 @@
 【程序目的】
 获取待预测数据。
 """
-from data_provider.data_acquisition import get_data
+from common.database_oracle import get_data
 from config.config import get_argparse
+from config.db_tables import (FLT_LIST_TABLE, SMALL_PART_KNN_PREDICT_TABLE, SOLO_ADVICE_PRICE_PREDICT_TABLE)
 
 
 def GetPredictData(args):
     # 1 获取小份额航线待预测数据
-    predict_data = get_data("oracle",
-                        data_sql=f"SELECT * FROM {args.FlightCapControlKnnPredictData} WHERE FLT_SEGMENT IN (SELECT FLT_SEGMENT FROM {args.flt_list} WHERE FLT_TYPE='SMALL_PART' AND EXECUTION_STATUS=1)")
+    predict_data = get_data(f"SELECT * FROM {SMALL_PART_KNN_PREDICT_TABLE} WHERE FLT_SEGMENT IN (SELECT FLT_SEGMENT FROM {FLT_LIST_TABLE} WHERE FLT_TYPE='SMALL_PART' AND EXECUTION_STATUS=1)")
     small_part_flt_data = {
         'predict_data': predict_data
     }
@@ -17,7 +17,7 @@ def GetPredictData(args):
     # 2 获取大份额航线待预测数据
 
     # 3 获取独飞航线待预测数据
-    solo_flt_predict_data = get_data("oracle", data_sql=f"SELECT * FROM {args.solo_flight_advice_price_predict_table}")
+    solo_flt_predict_data = get_data(f"SELECT * FROM {SOLO_ADVICE_PRICE_PREDICT_TABLE}")
     solo_part_flt_data = {
         'predict_data': solo_flt_predict_data
     }
@@ -29,6 +29,6 @@ def GetPredictData(args):
     }
 
     # 获取所有航线类型
-    flt_list = get_data("oracle", data_sql=f"SELECT DISTINCT FLT_TYPE FROM {args.flt_list}").values.tolist()
+    flt_list = get_data(f"SELECT DISTINCT FLT_TYPE FROM {FLT_LIST_TABLE}").values.tolist()
 
     return data_set, flt_list
