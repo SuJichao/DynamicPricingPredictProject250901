@@ -11,11 +11,11 @@ import pandas as pd
 from multiprocessing import Pool
 from sklearn.preprocessing import StandardScaler
 
-from config.config import get_argparse
+from config.runtime_args import get_argparse
 from config.pricing_constants import SOLO_KNN_FEATURE_COLS, SOLO_KNN_TARGET_COLS
 from common.database_oracle import get_data, delete_data, insert_data
 from model.KNeighborsRegressor import SoloFltKnnRegressorFunction
-from config.db_tables import (SOLO_ADVICE_PRICE_TRAIN_TABLE, SOLO_ADVICE_PRICE_PREDICT_TABLE, SOLO_ADVICE_PRICE_KNN_LIST)
+from config.db_queries import (SOLO_ADVICE_PRICE_TRAIN_TABLE, SOLO_ADVICE_PRICE_PREDICT_TABLE, SOLO_ADVICE_PRICE_KNN_LIST)
 
 
 class SoloFlightNumberIncreaseKNN(object):

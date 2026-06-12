@@ -14,12 +14,13 @@
 ```
 run.py                                # 主入口
 config/
-  config.py                           # argparse 参数
+  runtime_args.py                     # argparse 参数 + LOG_PATH
   pricing_constants.py                # 定价参数常量（魔法数字集中管理）
+  db_queries.py                       # 数据库表名与 SQL 查询
+  email_config.py                     # 邮件服务配置
   db_config.ini                       # Oracle 连接配置
 data_provider/
   data_acquisition.py                 # 数据获取（Oracle / CSV）
-  data_integrity.py                   # 数据完整性检查
 common/
   oracle/database_oracle.py           # Oracle 连接池 + CRUD 封装
   get_logger.py                       # 日志配置

@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 
 from config.pricing_constants import (SMALL_FLT_KNN_NORMAL_K, SMALL_FLT_KNN_HOLIDAY_K, SMALL_PART_KNN_TARGET_COLS, SMALL_PART_KNN_FEATURE_COLS, SMALL_PART_KNN_OUTPUT_COLS)
-from config.db_tables import (SMALL_PART_KNN_LOG_TABLE, SMALL_PART_KNN_TRAIN_TABLE, SMALL_PART_KNN_PREDICT_TABLE, SMALL_PART_KNN_PREDICT_LIST)
+from config.db_queries import (SMALL_PART_KNN_LOG_TABLE, SMALL_PART_KNN_TRAIN_TABLE, SMALL_PART_KNN_PREDICT_TABLE, SMALL_PART_KNN_PREDICT_LIST)
 from common.database_oracle import get_data, delete_data, insert_data
 from common.get_logger import get_logger
 from model.KNeighborsRegressor_v2 import SmallFltKnnRegressorFunction_v2
@@ -185,6 +185,6 @@ def knn_run(args):
 
 if __name__ == '__main__':
     mp.freeze_support()
-    from config.config import get_argparse
+    from config.runtime_args import get_argparse
     args = get_argparse()
     knn_run(args)

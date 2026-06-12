@@ -9,9 +9,15 @@ import uuid
 import numpy as np
 import pandas as pd
 
-from config.config import get_argparse
-from config.pricing_constants import *
-from config.db_tables import FLIGHT_PRICE_BOTTOM_SQL
+from config.runtime_args import get_argparse
+from config.pricing_constants import (
+    SOLO_FLT_BOTTOM_DISCOUNT,
+    SOLO_FLT_PRICE_FLOOR_ABSOLUTE,
+    SOLO_NS_BAGGAGE_LOWER_DISCOUNT,
+    SOLO_NS_BAGGAGE_TARGET_DISCOUNT,
+    round_to_10,
+)
+from config.db_queries import FLIGHT_PRICE_BOTTOM_SQL
 from common.database_oracle import get_data
 def true_price_up_down(config, flt_type, data):
     logging.info(f"【SoloFltPriceUpDown】{config.version_number} 程序开始！")

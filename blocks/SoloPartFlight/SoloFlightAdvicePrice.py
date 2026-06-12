@@ -7,9 +7,16 @@ import logging
 import numpy as np
 import pandas as pd
 
-from config.config import get_argparse
-from config.pricing_constants import *
-from config.db_tables import (SOLO_SALES_RATIO_SQL, SOLO_BOTTOM_PRICE_TABLE, SOLO_PREVIOUS_PRICE_TABLE, RB_OTA_DATA_SQL, SOLO_CHUNYUN_ZFX_LIST)
+from config.runtime_args import get_argparse
+from config.pricing_constants import (
+    SOLO_FLT_BOTTOM_DISCOUNT,
+    SOLO_FLT_DISCOUNT_PER_TFLAG,
+    SOLO_FLT_FULL_PRICE_FALLBACK,
+    SOLO_FLT_PRICE_MULTIPLIER_MAX,
+    SOLO_FLT_PRICE_MULTIPLIER_MIN,
+    SOLO_FLT_TARGET_LOAD_FACTOR,
+)
+from config.db_queries import (SOLO_SALES_RATIO_SQL, SOLO_BOTTOM_PRICE_TABLE, SOLO_PREVIOUS_PRICE_TABLE, RB_OTA_DATA_SQL, SOLO_CHUNYUN_ZFX_LIST)
 from common.database_oracle import get_data, insert_data
 from blocks.SoloPartFlight.SoloBkdSharpRise import bkd_sharp_rise
 

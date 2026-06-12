@@ -3,7 +3,7 @@ import logging
 import uuid
 
 from common.database_oracle import get_data, delete_data, insert_data
-from config.db_tables import FLT_LIST_TABLE
+from config.db_queries import FLT_LIST_TABLE
 
 # 数据存储模块
 def data_storage(config, flt_type, result_data):

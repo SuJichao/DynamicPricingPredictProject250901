@@ -4,7 +4,7 @@
 """
 import win32com.client
 import os
-from config.config import get_argparse
+from config.runtime_args import get_argparse
 
 
 def use_vba(vba_file_path, macro_name):

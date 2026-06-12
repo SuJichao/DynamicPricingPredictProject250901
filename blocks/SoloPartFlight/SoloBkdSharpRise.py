@@ -9,9 +9,17 @@ import uuid
 import numpy as np
 import pandas as pd
 
-from config.config import get_argparse
-from config.pricing_constants import *
-from config.db_tables import RB_OTA_DATA_SQL, SOLO_PREVIOUS_PRICE_TABLE
+from config.runtime_args import get_argparse
+from config.pricing_constants import (
+    SOLO_BKD_SURGE_D0_DIVISOR,
+    SOLO_BKD_SURGE_D2_D7_DIVISOR,
+    SOLO_BKD_SURGE_D8_DIVISOR,
+    SOLO_BKD_SURGE_LOAD_THRESHOLD,
+    SOLO_BKD_SURGE_STEP_CAP,
+    SOLO_FLT_DISCOUNT_PER_TFLAG,
+    round_to_10,
+)
+from config.db_queries import RB_OTA_DATA_SQL, SOLO_PREVIOUS_PRICE_TABLE
 from common.database_oracle import get_data, delete_data, insert_data
 def bkd_sharp_rise(config, data):
     advice_price_data = data

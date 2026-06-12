@@ -59,7 +59,7 @@ def get_logger(name=None, log_path=None, log_level=logging.INFO):
     # 如果调用时没传 log_path，则从 config 中读取统一配置的日志路径
     if log_path is None:
         try:
-            from config.config import LOG_PATH
+            from config.runtime_args import LOG_PATH
         except (ImportError, ModuleNotFoundError):
             _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             LOG_PATH = os.path.join(_project_root, 'logs', 'app.log')

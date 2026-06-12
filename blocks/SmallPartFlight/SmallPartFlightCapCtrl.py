@@ -13,9 +13,9 @@ import pandas as pd
 from multiprocessing import Pool
 from sklearn.preprocessing import StandardScaler
 
-from config.config import get_argparse
+from config.runtime_args import get_argparse
 from config.pricing_constants import (SMALL_PART_KNN_TARGET_COLS, SMALL_PART_KNN_FEATURE_COLS, SMALL_PART_KNN_OUTPUT_COLS)
-from config.db_tables import (
+from config.db_queries import (
     SMALL_PART_KNN_IDENTIFIER,
     SMALL_PART_KNN_TRAIN_TABLE,
     SMALL_PART_KNN_PREDICT_TABLE,

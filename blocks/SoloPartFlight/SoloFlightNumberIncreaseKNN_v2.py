@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 
 from config.pricing_constants import (SOLO_FLT_KNN_NORMAL_K, SOLO_FLT_KNN_HOLIDAY_K, SOLO_FLT_KNN_SPRING_FESTIVAL_K, SOLO_KNN_FEATURE_COLS, SOLO_KNN_TARGET_COLS)
-from config.db_tables import (SOLO_ADVICE_PRICE_TRAIN_TABLE, SOLO_ADVICE_PRICE_PREDICT_TABLE, SOLO_ADVICE_PRICE_KNN_LIST)
+from config.db_queries import (SOLO_ADVICE_PRICE_TRAIN_TABLE, SOLO_ADVICE_PRICE_PREDICT_TABLE, SOLO_ADVICE_PRICE_KNN_LIST)
 from common.database_oracle import insert_data
 from model.KNeighborsRegressor_v2 import SoloFltKnnRegressorFunction_v2
 from blocks.UniversalModule.KNNBasePredictor import KNNBasePredictor
@@ -130,6 +130,6 @@ def solo_knn_est_run(args):
 
 
 if __name__ == '__main__':
-    from config.config import get_argparse
+    from config.runtime_args import get_argparse
     mp.freeze_support()
     solo_knn_est_run(get_argparse())

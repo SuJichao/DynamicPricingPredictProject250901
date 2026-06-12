@@ -3,8 +3,8 @@
 获取待预测数据。
 """
 from common.database_oracle import get_data
-from config.config import get_argparse
-from config.db_tables import (FLT_LIST_TABLE, SMALL_PART_KNN_PREDICT_TABLE, SOLO_ADVICE_PRICE_PREDICT_TABLE)
+from config.runtime_args import get_argparse
+from config.db_queries import (FLT_LIST_TABLE, SMALL_PART_KNN_PREDICT_TABLE, SOLO_ADVICE_PRICE_PREDICT_TABLE)
 
 
 def GetPredictData(args):
